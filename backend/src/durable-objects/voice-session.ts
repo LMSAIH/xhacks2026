@@ -62,12 +62,12 @@ export class VoiceTeacherSession extends DurableObject<Env> {
     this.send(ws, { type: 'state_change', state: 'processing' });
 
     try {
-      // STT - Whisper (English only)
+      // STT - Deepgram Nova-3
       const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
-      const sttResult = await this.env.AI.run('@cf/openai/whisper', {
+      // @ts-expect-error - model exists in Workers AI
+      const sttResult = await this.env.AI.run('@cf/deepgram/whisper-large-v3-turbo', {
         audio: Array.from(audioBytes),
-        language: 'en',
-      });
+      }) as { text?: string };
       
       const transcript = sttResult.text?.trim();
       if (!transcript) {
@@ -92,24 +92,19 @@ export class VoiceTeacherSession extends DurableObject<Env> {
       
       this.send(ws, { type: 'transcript', text: response, isPartial: false, isUser: false });
 
-      // TTS - MeloTTS
+      // TTS - Deepgram Aura
       this.send(ws, { type: 'state_change', state: 'speaking' });
       
-      const ttsResult = await this.env.AI.run('@cf/myshell-ai/melotts', {
-        prompt: response,
-        lang: 'en',
-      });
+      // @ts-expect-error - model exists in Workers AI
+      const ttsResult = await this.env.AI.run('@cf/deepgram/aura-asteria-en', {
+        text: response,
+      }) as Uint8Array | { audio: Uint8Array };
 
       let audioBuffer: ArrayBuffer;
       if (ttsResult instanceof Uint8Array) {
         audioBuffer = ttsResult.buffer as ArrayBuffer;
-      } else if (ttsResult && typeof ttsResult === 'object' && 'audio' in ttsResult) {
-        const audio = (ttsResult as { audio: string | Uint8Array }).audio;
-        if (typeof audio === 'string') {
-          audioBuffer = Uint8Array.from(atob(audio), c => c.charCodeAt(0)).buffer as ArrayBuffer;
-        } else {
-          audioBuffer = audio.buffer as ArrayBuffer;
-        }
+      } else if (ttsResult && 'audio' in ttsResult) {
+        audioBuffer = ttsResult.audio.buffer as ArrayBuffer;
       } else {
         throw new Error('No audio from TTS');
       }
@@ -118,7 +113,7 @@ export class VoiceTeacherSession extends DurableObject<Env> {
         type: 'audio',
         audio: this.toBase64(audioBuffer),
         format: 'wav',
-        sampleRate: 44100,
+        sampleRate: 24000,
       });
 
     } finally {
@@ -148,21 +143,16 @@ export class VoiceTeacherSession extends DurableObject<Env> {
 
       this.send(ws, { type: 'state_change', state: 'speaking' });
       
-      const ttsResult = await this.env.AI.run('@cf/myshell-ai/melotts', {
-        prompt: response,
-        lang: 'en',
-      });
+      // @ts-expect-error - model exists in Workers AI
+      const ttsResult = await this.env.AI.run('@cf/deepgram/aura-asteria-en', {
+        text: response,
+      }) as Uint8Array | { audio: Uint8Array };
 
       let audioBuffer: ArrayBuffer;
       if (ttsResult instanceof Uint8Array) {
         audioBuffer = ttsResult.buffer as ArrayBuffer;
-      } else if (ttsResult && typeof ttsResult === 'object' && 'audio' in ttsResult) {
-        const audio = (ttsResult as { audio: string | Uint8Array }).audio;
-        if (typeof audio === 'string') {
-          audioBuffer = Uint8Array.from(atob(audio), c => c.charCodeAt(0)).buffer as ArrayBuffer;
-        } else {
-          audioBuffer = audio.buffer as ArrayBuffer;
-        }
+      } else if (ttsResult && 'audio' in ttsResult) {
+        audioBuffer = ttsResult.audio.buffer as ArrayBuffer;
       } else {
         throw new Error('No audio from TTS');
       }
@@ -171,7 +161,7 @@ export class VoiceTeacherSession extends DurableObject<Env> {
         type: 'audio',
         audio: this.toBase64(audioBuffer),
         format: 'wav',
-        sampleRate: 44100,
+        sampleRate: 24000,
       });
 
     } finally {

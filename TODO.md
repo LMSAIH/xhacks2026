@@ -53,10 +53,10 @@
 ## 🔧 Fullstack Dev 2 (Person 3)
 
 ### Priority: Voice Pipeline Integration
-- [x] **STT integration** - Add `@cf/deepgram/nova-3` to voice session
+- [x] **STT integration** - Add `@cf/deepgram/whisper-large-v3-turbo` to voice session
   - Receive audio chunks from WebSocket
-  - Stream to STT, get transcript
-- [x] **TTS integration** - Add `@cf/deepgram/aura-2-en` to voice session
+  - Transcribe audio, get text
+- [x] **TTS integration** - Add `@cf/deepgram/aura-asteria-en` to voice session
   - Convert LLM response to audio
   - Stream audio chunks back to client
 - [x] **Interrupt detection** - Parse transcript for "stop", "wait", "hold on"

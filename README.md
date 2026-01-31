@@ -9,7 +9,7 @@ A real-time voice-based AI tutoring platform for SFU students. Pick a course, ha
 
 ## ✨ Features
 
-- **🎙️ Real-Time Voice Conversations**: Speak naturally with your AI tutor using Deepgram Nova-3 (STT) and Aura-1 (TTS)
+- **🎙️ Real-Time Voice Conversations**: Speak naturally with your AI tutor using Deepgram Whisper (STT) and Aura (TTS)
 - **📚 SFU Course Integration**: RAG-powered responses using real course outlines from SFU Courses API
 - **🛑 Interrupt Commands**: Say "Stop", "Wait", or "Hold on" to cancel TTS immediately
 - **🔄 Clarification Requests**: Say "What?" or "I don't understand" to get simpler explanations
@@ -62,8 +62,8 @@ A real-time voice-based AI tutoring platform for SFU students. Pick a course, ha
 ### Workers AI Models
 | Model | Purpose |
 |-------|---------|
-| `@cf/deepgram/nova-3` | Real-time Speech-to-Text |
-| `@cf/deepgram/aura-1` | Real-time Text-to-Speech |
+| `@cf/deepgram/whisper-large-v3-turbo` | Speech-to-Text |
+| `@cf/deepgram/aura-asteria-en` | Text-to-Speech |
 | `@cf/meta/llama-3.1-8b-instruct` | Text generation/tutoring |
 | `@cf/baai/bge-base-en-v1.5` | 768-dim embeddings |
 
@@ -165,11 +165,11 @@ npx wrangler deploy
 ```
 1. Student speaks → Microphone captures audio
 2. Audio chunks → WebSocket → Durable Object
-3. STT (Nova-3) → Transcript
+3. STT (Deepgram Whisper) → Transcript
 4. Check for interrupt commands ("stop", "wait")
 5. RAG query (Vectorize) → Relevant course content
 6. LLM (Llama 3.1) → Generate response with context
-7. TTS (Aura-1) → Audio stream
+7. TTS (Deepgram Aura) → Audio stream
 8. Audio → WebSocket → Frontend playback
 9. Transcript → D1 (async flush)
 ```
