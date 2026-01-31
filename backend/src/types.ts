@@ -1,52 +1,37 @@
-// Cloudflare Workers AI Types
+/**
+ * SFU AI Teacher - Types
+ */
+
+// Cloudflare Bindings
 export interface Env {
   AI: Ai;
+  DB: D1Database;
+  KV: KVNamespace;
+  VECTORIZE: VectorizeIndex;
+  VOICE_SESSION: DurableObjectNamespace;
 }
 
-export interface Ai {
-  run(model: string, input: Record<string, unknown>): Promise<unknown>;
-}
+// Voice states
+export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking' | 'interrupted' | 'error';
 
-export interface ConversationMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-// Messages from client to server
+// Client -> Server messages
 export type ClientMessage =
-  | { type: 'audio'; audio: string } // base64 encoded audio
-  | { type: 'transcription_complete' }
+  | { type: 'start_session'; courseCode: string; userId?: string }
+  | { type: 'audio'; audio: string }
   | { type: 'text'; text: string }
-  | { type: 'clear' };
+  | { type: 'interrupt' }
+  | { type: 'clear_history' };
 
-// Messages from server to client
+// Server -> Client messages  
 export type ServerMessage =
-  | { type: 'ready' }
-  | { type: 'thinking' }
-  | { type: 'speaking' }
+  | { type: 'ready'; sessionId: string }
+  | { type: 'session_started'; sessionId: string }
+  | { type: 'state_change'; state: VoiceState }
   | { type: 'transcript'; text: string; isPartial: boolean; isUser: boolean }
   | { type: 'audio'; audio: string; format: string; sampleRate: number }
-  | { type: 'audio_complete' }
+  | { type: 'interrupted' }
   | { type: 'cleared' }
   | { type: 'error'; message: string };
-
-// Nova-3 STT Response
-export interface Nova3Response {
-  results?: {
-    channels?: Array<{
-      alternatives?: Array<{
-        transcript?: string;
-        confidence?: number;
-        words?: Array<{
-          word: string;
-          start: number;
-          end: number;
-          confidence: number;
-        }>;
-      }>;
-    }>;
-  };
-}
 
 // LLM Response
 export interface LLMResponse {

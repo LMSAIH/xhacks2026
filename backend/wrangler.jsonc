@@ -1,8 +1,69 @@
 {
-  "name": "voice-agent-backend",
-  "main": "src/index.ts",
-  "compatibility_date": "2024-12-01",
-  "ai": {
-    "binding": "AI"
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "sfu-ai-teacher",
+	"main": "src/index.ts",
+	"compatibility_date": "2024-12-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	// Environment variables
+	"vars": {
+		"ENVIRONMENT": "development",
+		"SFU_API_BASE_URL": "https://api.sfucourses.com",
+		"AI_GATEWAY_ACCOUNT_ID": "",
+		"AI_GATEWAY_NAME": "sfu-ai-teacher"
+	},
+	// Workers AI binding
+	"ai": {
+		"binding": "AI"
+	},
+	// D1 Database
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "sfu-ai-teacher-db",
+			"database_id": "2fb39d1f-e4ad-4c85-a483-7761c9376a80"
+		}
+	],
+	// KV Namespace for caching
+	"kv_namespaces": [
+		{
+			"binding": "KV",
+			"id": "1830955e6b9847ad82769136f86a1cde"
+		}
+	],
+	// Vectorize index for RAG
+	"vectorize": [
+		{
+			"binding": "VECTORIZE",
+			"index_name": "sfu-course-index"
+		}
+	],
+	// Durable Objects for voice sessions
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "VOICE_SESSION",
+				"class_name": "VoiceTeacherSession"
+			}
+		]
+	},
+	// Migrations for Durable Objects
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_classes": [
+				"VoiceTeacherSession"
+			]
+		}
+	],
+	// Development settings
+	"dev": {
+		"port": 8787,
+		"local_protocol": "http"
+	},
+	// Observability
+	"observability": {
+		"enabled": true
+	}
 }
