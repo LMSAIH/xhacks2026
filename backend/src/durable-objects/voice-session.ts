@@ -1,12 +1,12 @@
 import { DurableObject } from 'cloudflare:workers';
-import type { Env, VoiceState, ClientMessage, ServerMessage, LLMResponse } from '../types';
+import type { Env, ClientMessage, ServerMessage } from '../types';
 
-const SYSTEM_PROMPT = `You are an expert AI tutor for SFU courses. Be conversational, helpful, and concise (2-4 sentences for voice).`;
+const SYSTEM_PROMPT = `You are a helpful AI tutor. Keep responses brief (1-2 sentences).`;
 
 export class VoiceTeacherSession extends DurableObject<Env> {
-  private voiceState: VoiceState = 'idle';
-  private courseCode: string | null = null;
-  private history: { role: string; content: string }[] = [];
+  private courseCode = '';
+  private history: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
+  private isProcessing = false;
 
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get('Upgrade') !== 'websocket') {
@@ -15,81 +15,185 @@ export class VoiceTeacherSession extends DurableObject<Env> {
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    
     this.ctx.acceptWebSocket(server);
     this.send(server, { type: 'ready', sessionId: this.ctx.id.toString() });
-
     return new Response(null, { status: 101, webSocket: client });
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
     try {
       const data = JSON.parse(message as string) as ClientMessage;
-      
-      switch (data.type) {
-        case 'start_session':
-          this.courseCode = data.courseCode;
-          this.history = [{ role: 'system', content: SYSTEM_PROMPT + '\nCourse: ' + data.courseCode }];
-          this.send(ws, { type: 'session_started', sessionId: this.ctx.id.toString() });
-          break;
 
-        case 'text':
-          await this.handleText(ws, data.text);
-          break;
+      if (data.type === 'start_session') {
+        this.courseCode = data.courseCode;
+        this.history = [{ role: 'system', content: `${SYSTEM_PROMPT} Course: ${data.courseCode}` }];
+        this.send(ws, { type: 'session_started', sessionId: this.ctx.id.toString() });
+        return;
+      }
 
-        case 'audio':
-          // TODO: Your team implements STT pipeline
-          await this.handleAudio(ws, data.audio);
-          break;
+      if (data.type === 'clear_history') {
+        this.history = this.history.slice(0, 1);
+        this.send(ws, { type: 'cleared' });
+        return;
+      }
 
-        case 'interrupt':
-          this.voiceState = 'idle';
-          this.send(ws, { type: 'interrupted' });
-          break;
+      if (data.type === 'interrupt') {
+        this.isProcessing = false;
+        this.send(ws, { type: 'interrupted' });
+        return;
+      }
 
-        case 'clear_history':
-          this.history = this.history.slice(0, 1);
-          this.send(ws, { type: 'cleared' });
-          break;
+      if (this.isProcessing) return;
+
+      if (data.type === 'audio') {
+        await this.handleAudio(ws, data.audio);
+      } else if (data.type === 'text') {
+        await this.handleText(ws, data.text);
       }
     } catch (e) {
-      console.error('WS error:', e);
-      this.send(ws, { type: 'error', message: 'Processing failed' });
+      console.error('Error:', e);
+      this.isProcessing = false;
+      this.send(ws, { type: 'error', message: String(e) });
+    }
+  }
+
+  private async handleAudio(ws: WebSocket, audioBase64: string) {
+    this.isProcessing = true;
+    this.send(ws, { type: 'state_change', state: 'processing' });
+
+    try {
+      // STT - Whisper (English only)
+      const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
+      const sttResult = await this.env.AI.run('@cf/openai/whisper', {
+        audio: Array.from(audioBytes),
+        language: 'en',
+      });
+      
+      const transcript = sttResult.text?.trim();
+      if (!transcript) {
+        this.isProcessing = false;
+        this.send(ws, { type: 'state_change', state: 'idle' });
+        return;
+      }
+
+      this.send(ws, { type: 'transcript', text: transcript, isPartial: false, isUser: true });
+
+      // LLM - Llama 3 8B
+      this.history.push({ role: 'user', content: transcript });
+      
+      // @ts-expect-error - model exists in Workers AI
+      const llmResult = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        messages: this.history.slice(-8),
+        max_tokens: 150,
+      }) as { response?: string };
+
+      const response = llmResult.response || "Sorry, I couldn't understand that.";
+      this.history.push({ role: 'assistant', content: response });
+      
+      this.send(ws, { type: 'transcript', text: response, isPartial: false, isUser: false });
+
+      // TTS - MeloTTS
+      this.send(ws, { type: 'state_change', state: 'speaking' });
+      
+      const ttsResult = await this.env.AI.run('@cf/myshell-ai/melotts', {
+        prompt: response,
+        lang: 'en',
+      });
+
+      let audioBuffer: ArrayBuffer;
+      if (ttsResult instanceof Uint8Array) {
+        audioBuffer = ttsResult.buffer as ArrayBuffer;
+      } else if (ttsResult && typeof ttsResult === 'object' && 'audio' in ttsResult) {
+        const audio = (ttsResult as { audio: string | Uint8Array }).audio;
+        if (typeof audio === 'string') {
+          audioBuffer = Uint8Array.from(atob(audio), c => c.charCodeAt(0)).buffer as ArrayBuffer;
+        } else {
+          audioBuffer = audio.buffer as ArrayBuffer;
+        }
+      } else {
+        throw new Error('No audio from TTS');
+      }
+
+      this.send(ws, {
+        type: 'audio',
+        audio: this.toBase64(audioBuffer),
+        format: 'wav',
+        sampleRate: 44100,
+      });
+
+    } finally {
+      this.isProcessing = false;
+      this.send(ws, { type: 'state_change', state: 'idle' });
     }
   }
 
   private async handleText(ws: WebSocket, text: string) {
-    this.voiceState = 'processing';
+    this.isProcessing = true;
     this.send(ws, { type: 'state_change', state: 'processing' });
     this.send(ws, { type: 'transcript', text, isPartial: false, isUser: true });
 
-    this.history.push({ role: 'user', content: text });
+    try {
+      this.history.push({ role: 'user', content: text });
 
-    const llm = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-      messages: this.history.slice(-10),
-      max_tokens: 200,
-    }) as LLMResponse;
+      // @ts-expect-error - model exists in Workers AI
+      const llmResult = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        messages: this.history.slice(-8),
+        max_tokens: 150,
+      }) as { response?: string };
 
-    const response = llm.response || "Sorry, I didn't understand.";
-    this.history.push({ role: 'assistant', content: response });
+      const response = llmResult.response || "Sorry, I couldn't understand that.";
+      this.history.push({ role: 'assistant', content: response });
 
-    this.send(ws, { type: 'transcript', text: response, isPartial: false, isUser: false });
-    
-    // TODO: TTS pipeline - @cf/deepgram/aura-1
-    this.voiceState = 'idle';
-    this.send(ws, { type: 'state_change', state: 'idle' });
+      this.send(ws, { type: 'transcript', text: response, isPartial: false, isUser: false });
+
+      this.send(ws, { type: 'state_change', state: 'speaking' });
+      
+      const ttsResult = await this.env.AI.run('@cf/myshell-ai/melotts', {
+        prompt: response,
+        lang: 'en',
+      });
+
+      let audioBuffer: ArrayBuffer;
+      if (ttsResult instanceof Uint8Array) {
+        audioBuffer = ttsResult.buffer as ArrayBuffer;
+      } else if (ttsResult && typeof ttsResult === 'object' && 'audio' in ttsResult) {
+        const audio = (ttsResult as { audio: string | Uint8Array }).audio;
+        if (typeof audio === 'string') {
+          audioBuffer = Uint8Array.from(atob(audio), c => c.charCodeAt(0)).buffer as ArrayBuffer;
+        } else {
+          audioBuffer = audio.buffer as ArrayBuffer;
+        }
+      } else {
+        throw new Error('No audio from TTS');
+      }
+
+      this.send(ws, {
+        type: 'audio',
+        audio: this.toBase64(audioBuffer),
+        format: 'wav',
+        sampleRate: 44100,
+      });
+
+    } finally {
+      this.isProcessing = false;
+      this.send(ws, { type: 'state_change', state: 'idle' });
+    }
   }
 
-  private async handleAudio(ws: WebSocket, audioBase64: string) {
-    // TODO: STT with @cf/deepgram/nova-3
-    this.send(ws, { type: 'error', message: 'Audio not implemented yet' });
+  private toBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
   }
 
   private send(ws: WebSocket, msg: ServerMessage) {
     ws.send(JSON.stringify(msg));
   }
 
-  async webSocketClose(ws: WebSocket) {
-    console.log('Session closed:', this.ctx.id.toString());
+  async webSocketClose() {
+    this.isProcessing = false;
   }
 }

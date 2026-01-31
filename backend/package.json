@@ -4,8 +4,8 @@
   "description": "SFU AI Teacher/Tutor - Cloudflare Workers Backend",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --config wrangler.jsonc",
+    "deploy": "wrangler deploy --config wrangler.jsonc",
     "typecheck": "tsc --noEmit",
     "db:migrate": "wrangler d1 execute sfu-ai-teacher-db --file=./sql/schema.sql",
     "db:migrate:local": "wrangler d1 execute sfu-ai-teacher-db --local --file=./sql/schema.sql"

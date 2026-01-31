@@ -12,12 +12,12 @@
 ## 👤 Frontend Dev (Person 1)
 
 ### Priority: Voice UI & WebSocket Connection
-- [ ] **Connect WebSocket to backend** - Update `use-realtime-voice.ts` to connect to `/api/voice/:courseCode`
-- [ ] **Course selector component** - Dropdown/search to pick SFU courses before starting session
-- [ ] **Audio playback** - Handle incoming TTS audio chunks from WebSocket
-- [ ] **Microphone capture** - Send audio chunks to WebSocket (16kHz PCM or Opus)
-- [ ] **Interrupt button** - Visual "Stop" button that sends interrupt command
-- [ ] **Loading states** - Show when AI is thinking/speaking
+- [x] **Connect WebSocket to backend** - Update `use-realtime-voice.ts` to connect to `/api/voice/:courseCode`
+- [x] **Course selector component** - Dropdown/search to pick SFU courses before starting session
+- [x] **Audio playback** - Handle incoming TTS audio chunks from WebSocket
+- [x] **Microphone capture** - Send audio chunks to WebSocket (16kHz PCM or Opus)
+- [x] **Interrupt button** - Visual "Stop" button that sends interrupt command
+- [x] **Loading states** - Show when AI is thinking/speaking
 - [ ] **Mobile responsive** - Make sure voice UI works on mobile
 
 ### Nice to Have
@@ -53,13 +53,13 @@
 ## 🔧 Fullstack Dev 2 (Person 3)
 
 ### Priority: Voice Pipeline Integration
-- [ ] **STT integration** - Add `@cf/deepgram/nova-3` to voice session
+- [x] **STT integration** - Add `@cf/deepgram/nova-3` to voice session
   - Receive audio chunks from WebSocket
   - Stream to STT, get transcript
-- [ ] **TTS integration** - Add `@cf/deepgram/aura-1` to voice session
+- [x] **TTS integration** - Add `@cf/deepgram/aura-2-en` to voice session
   - Convert LLM response to audio
   - Stream audio chunks back to client
-- [ ] **Interrupt detection** - Parse transcript for "stop", "wait", "hold on"
+- [x] **Interrupt detection** - Parse transcript for "stop", "wait", "hold on"
   - Cancel TTS playback when detected
 - [ ] **Progress tracking** - Implement `GET /api/progress/:userId`
   - Query D1 for user's session history
@@ -75,7 +75,7 @@
 ## ⚙️ Backend Dev (Person 4)
 
 ### Priority: Durable Object & Data Layer
-- [ ] **Enhance VoiceTeacherSession DO**
+- [x] **Enhance VoiceTeacherSession DO**
   - Add session state management (idle, listening, thinking, speaking)
   - Handle multiple concurrent connections gracefully
   - Implement session timeout/cleanup
@@ -84,11 +84,11 @@
   - `insertTranscript(sessionId, role, text)`
   - `updateProgress(userId, courseCode, metrics)`
   - `getSessionHistory(userId)`
-- [ ] **LLM context management**
+- [x] **LLM context management**
   - Build system prompt with RAG context
   - Maintain conversation history in DO state
   - Token limit handling (truncate old messages)
-- [ ] **WebSocket protocol** - Define message types
+- [x] **WebSocket protocol** - Define message types
   - `{ type: 'audio', data: ArrayBuffer }`
   - `{ type: 'transcript', text: string, role: 'user'|'assistant' }`
   - `{ type: 'status', state: 'listening'|'thinking'|'speaking' }`
@@ -104,14 +104,14 @@
 ## 🎯 Integration Checkpoints
 
 ### Checkpoint 1: Basic Flow
-- [ ] Frontend can connect WebSocket to backend
-- [ ] Backend receives audio, sends mock response
-- [ ] Frontend plays mock audio
+- [x] Frontend can connect WebSocket to backend
+- [x] Backend receives audio, sends mock response
+- [x] Frontend plays mock audio
 
 ### Checkpoint 2: AI Pipeline
-- [ ] STT transcribes user speech
-- [ ] LLM generates response
-- [ ] TTS converts to audio
+- [x] STT transcribes user speech
+- [x] LLM generates response
+- [x] TTS converts to audio
 
 ### Checkpoint 3: RAG + Courses
 - [ ] Course data ingested to D1 + Vectorize

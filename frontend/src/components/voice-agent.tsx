@@ -5,7 +5,7 @@ import { TranscriptDisplay } from '@/components/transcript-display';
 import { ControlButtons } from '@/components/control-buttons';
 import { StatusIndicator } from '@/components/status-indicator';
 import { Card } from '@/components/ui/card';
-import { Settings, Sparkles, Loader2 } from 'lucide-react';
+import { Settings, Sparkles, Loader2, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -16,15 +16,28 @@ interface TranscriptMessage {
   timestamp: Date;
 }
 
-// Default to localhost for development, can be configured
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'ws://localhost:8787/realtime';
+// Backend URL - points to the /api/voice/:courseCode endpoint
+const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'ws://localhost:8787';
+
+// Sample courses for demo
+const COURSES = [
+  { code: 'CMPT120', name: 'Introduction to Computing Science' },
+  { code: 'CMPT125', name: 'Introduction to Computing Science II' },
+  { code: 'CMPT225', name: 'Data Structures and Programming' },
+  { code: 'CMPT276', name: 'Introduction to Software Engineering' },
+  { code: 'CMPT310', name: 'Introduction to Artificial Intelligence' },
+];
 
 export function VoiceAgent() {
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState(COURSES[0]);
   const transcriptRef = useRef<HTMLDivElement>(null);
+
+  // Build WebSocket URL with course code
+  const wsUrl = `${BACKEND_BASE}/api/voice/${selectedCourse.code}`;
 
   const handleTranscriptUpdate = useCallback((transcript: string, isUser: boolean) => {
     // Add to messages immediately
@@ -55,13 +68,16 @@ export function VoiceAgent() {
     isListening, 
     isSpeaking, 
     isThinking,
+    isVadActive,
     connect, 
     disconnect,
     startRecording,
     stopRecording,
     clearConversation,
+    interrupt,
   } = useRealtimeVoice({
-    serverUrl: BACKEND_URL,
+    serverUrl: wsUrl,
+    courseCode: selectedCourse.code,
     onTranscriptUpdate: handleTranscriptUpdate,
     onConnectionChange: handleConnectionChange,
     onError: handleError,
@@ -83,21 +99,45 @@ export function VoiceAgent() {
     clearConversation();
   }, [clearConversation]);
 
+  const handleInterrupt = useCallback(() => {
+    interrupt();
+  }, [interrupt]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 flex flex-col">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-border/50 backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/30">
-            <Sparkles className="w-5 h-5 text-white" />
+            <BookOpen className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold tracking-tight">Voice Agent</h1>
-            <p className="text-xs text-muted-foreground">Powered by Cloudflare AI</p>
+            <h1 className="text-lg font-semibold tracking-tight">SFU AI Teacher</h1>
+            <p className="text-xs text-muted-foreground">Your AI tutor for SFU courses</p>
           </div>
         </div>
         
+        {/* Course Selector */}
         <div className="flex items-center gap-4">
+          <select
+            value={selectedCourse.code}
+            onChange={(e) => {
+              const course = COURSES.find(c => c.code === e.target.value);
+              if (course && !isConnected) {
+                setSelectedCourse(course);
+                setMessages([]);
+              }
+            }}
+            disabled={isConnected}
+            className="px-3 py-1.5 rounded-lg bg-secondary border border-border text-sm disabled:opacity-50"
+          >
+            {COURSES.map(course => (
+              <option key={course.code} value={course.code}>
+                {course.code} - {course.name}
+              </option>
+            ))}
+          </select>
+          
           <StatusIndicator
             isConnected={isConnected}
             isListening={isListening}
@@ -159,21 +199,34 @@ export function VoiceAgent() {
             isConnected={isConnected}
             isListening={isListening}
             isMuted={isMuted}
+            isSpeaking={isSpeaking}
+            isThinking={isThinking}
             onConnect={connect}
             onDisconnect={disconnect}
             onStartRecording={startRecording}
             onStopRecording={stopRecording}
             onToggleMute={handleToggleMute}
             onClear={handleClear}
+            onInterrupt={handleInterrupt}
             className="mt-8"
           />
 
           {/* Hint text */}
           <p className="text-xs text-muted-foreground mt-6 text-center max-w-xs">
             {isConnected
-              ? 'Hold the mic button and speak — release when done'
+              ? isVadActive 
+                ? '🎤 Hands-free mode active — just speak naturally'
+                : 'Hold the mic button and speak — release when done'
               : 'Press the call button to start a conversation'}
           </p>
+          
+          {/* VAD status indicator */}
+          {isConnected && isVadActive && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-green-500">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              Listening for speech...
+            </div>
+          )}
         </Card>
 
         {/* Transcript Section */}
@@ -224,23 +277,37 @@ export function VoiceAgent() {
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">
-                    Backend URL
+                    Current Course
+                  </label>
+                  <p className="mt-1 text-sm font-medium">{selectedCourse.code}</p>
+                  <p className="text-xs text-muted-foreground">{selectedCourse.name}</p>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">
+                    WebSocket URL
                   </label>
                   <input
                     type="text"
-                    className="mt-1 w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm"
-                    defaultValue={BACKEND_URL}
-                    placeholder="ws://localhost:8787/realtime"
+                    className="mt-1 w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm font-mono"
+                    value={wsUrl}
                     disabled
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Set via VITE_BACKEND_URL environment variable
-                  </p>
                 </div>
                 
                 <div className="pt-4 border-t border-border">
+                  <h3 className="text-sm font-medium mb-2">AI Stack (Cloudflare)</h3>
+                  <ul className="text-xs text-muted-foreground space-y-1">
+                    <li>• STT: Whisper (OpenAI)</li>
+                    <li>• LLM: Llama 3.2 3B Instruct</li>
+                    <li>• TTS: MeloTTS</li>
+                  </ul>
+                </div>
+                
+                <div className="pt-4 border-t border-border">
+                  <h3 className="text-sm font-medium mb-2">Voice Mode</h3>
                   <p className="text-xs text-muted-foreground">
-                    This app uses Cloudflare Workers AI with Deepgram models for speech-to-text and text-to-speech, plus Llama for conversation.
+                    {isVadActive ? '✅ Hands-free (auto-detect speech)' : '🎤 Push-to-talk'}
                   </p>
                 </div>
               </div>

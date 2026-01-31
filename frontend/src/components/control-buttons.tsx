@@ -1,17 +1,20 @@
 import { cn } from '@/lib/utils';
-import { Mic, MicOff, Phone, PhoneOff, Trash2 } from 'lucide-react';
+import { Mic, MicOff, Phone, PhoneOff, Trash2, StopCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface ControlButtonsProps {
   isConnected: boolean;
   isListening: boolean;
   isMuted: boolean;
+  isSpeaking?: boolean;
+  isThinking?: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
   onStartRecording: () => void;
   onStopRecording: () => void;
   onToggleMute: () => void;
   onClear: () => void;
+  onInterrupt?: () => void;
   className?: string;
 }
 
@@ -19,14 +22,18 @@ export function ControlButtons({
   isConnected,
   isListening,
   isMuted,
+  isSpeaking = false,
+  isThinking = false,
   onConnect,
   onDisconnect,
   onStartRecording,
   onStopRecording,
   onToggleMute,
   onClear,
+  onInterrupt,
   className,
 }: ControlButtonsProps) {
+  const canInterrupt = isSpeaking || isThinking;
   return (
     <div className={cn('flex items-center justify-center gap-4', className)}>
       {!isConnected ? (
@@ -62,26 +69,41 @@ export function ControlButtons({
             )}
           </Button>
 
-          {/* Push to talk button */}
-          <Button
-            variant="default"
-            size="lg"
-            className={cn(
-              'rounded-full w-20 h-20 transition-all duration-300 shadow-lg',
-              isListening
-                ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/40 scale-110'
-                : 'bg-primary hover:bg-primary/90 shadow-primary/30 hover:scale-105',
-              isMuted && 'opacity-50 cursor-not-allowed'
-            )}
-            onMouseDown={onStartRecording}
-            onMouseUp={onStopRecording}
-            onMouseLeave={onStopRecording}
-            onTouchStart={onStartRecording}
-            onTouchEnd={onStopRecording}
-            disabled={isMuted}
-          >
-            <Mic className={cn('w-8 h-8', isListening && 'animate-pulse')} />
-          </Button>
+          {/* Push to talk button OR Interrupt button */}
+          {canInterrupt && onInterrupt ? (
+            <Button
+              variant="default"
+              size="lg"
+              className={cn(
+                'rounded-full w-20 h-20 transition-all duration-300 shadow-lg',
+                'bg-orange-500 hover:bg-orange-600 shadow-orange-500/40',
+                'hover:scale-105 active:scale-95'
+              )}
+              onClick={onInterrupt}
+            >
+              <StopCircle className="w-8 h-8" />
+            </Button>
+          ) : (
+            <Button
+              variant="default"
+              size="lg"
+              className={cn(
+                'rounded-full w-20 h-20 transition-all duration-300 shadow-lg',
+                isListening
+                  ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/40 scale-110'
+                  : 'bg-primary hover:bg-primary/90 shadow-primary/30 hover:scale-105',
+                isMuted && 'opacity-50 cursor-not-allowed'
+              )}
+              onMouseDown={onStartRecording}
+              onMouseUp={onStopRecording}
+              onMouseLeave={onStopRecording}
+              onTouchStart={onStartRecording}
+              onTouchEnd={onStopRecording}
+              disabled={isMuted}
+            >
+              <Mic className={cn('w-8 h-8', isListening && 'animate-pulse')} />
+            </Button>
+          )}
 
           {/* End call button */}
           <Button
