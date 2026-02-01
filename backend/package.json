@@ -4,7 +4,8 @@
   "description": "SFU AI Teacher/Tutor - Cloudflare Workers Backend",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --config wrangler.jsonc",
+    "dev": "npm run db:migrate:local && wrangler dev --config wrangler.jsonc",
+    "dev:only": "wrangler dev --config wrangler.jsonc",
     "deploy": "wrangler deploy --config wrangler.jsonc",
     "typecheck": "tsc --noEmit",
     "test": "vitest",

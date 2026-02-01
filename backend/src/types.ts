@@ -43,3 +43,137 @@ export type ServerMessage =
 export interface LLMResponse {
   response?: string;
 }
+
+// ============================================
+// Course & Outline Types
+// ============================================
+
+export interface SFUCourse {
+  dept: string;
+  number: string;
+  title: string;
+  description: string;
+  units: string;
+  designation?: string;
+  degreeLevel?: string;
+  deliveryMethod?: string;
+  prerequisites?: string;
+  corequisites?: string;
+  notes?: string;
+  offerings?: Array<{
+    term: string;
+    instructors?: string[];
+  }>;
+}
+
+export interface Instructor {
+  id?: string;
+  sfuId: string;
+  name: string;
+  department?: string;
+  rating?: number;
+  reviewCount?: number;
+  wouldTakeAgain?: number;
+  difficulty?: number;
+  rawData?: string;
+}
+
+export interface CourseOutline {
+  topics: string[];
+  learningObjectives: string[];
+  courseTopics: string[];
+  summary: string;
+}
+
+export interface CourseWithInstructor {
+  course: {
+    code: string;
+    title: string;
+    description: string;
+    prerequisites?: string;
+    units?: string;
+  };
+  instructor: Instructor | null;
+}
+
+// ============================================
+// Session Types
+// ============================================
+
+export interface VoiceConfig {
+  voiceId: string;
+  speed?: number;
+  settings?: Record<string, unknown>;
+}
+
+export interface PersonalityConfig {
+  traits: string[];
+  systemPrompt: string;
+}
+
+export interface SessionCreate {
+  courseCode: string;
+  instructor: {
+    sfuId: string;
+    name: string;
+    rating?: number;
+  };
+  voiceConfig: VoiceConfig;
+  personalityConfig: PersonalityConfig;
+  outline?: CourseOutline;
+}
+
+export interface Session {
+  id: string;
+  courseCode: string;
+  instructorId?: string;
+  voiceConfig: VoiceConfig;
+  personalityConfig: PersonalityConfig;
+  outlineVersion?: string;
+  vectorizeRef?: string;
+  ragChunkCount: number;
+  personalityPrompt: string;
+  createdAt: string;
+}
+
+export interface SessionResponse {
+  sessionId: string;
+  ragChunkCount: number;
+  personalityPrompt: string;
+}
+
+// ============================================
+// RAG Types
+// ============================================
+
+export interface TextChunk {
+  text: string;
+  metadata: {
+    source: string;
+    topic?: string;
+    chunkIndex: number;
+  };
+}
+
+export interface RagContext {
+  chunks: TextChunk[];
+  chunkCount: number;
+  vectorizeRef: string;
+}
+
+// ============================================
+// KV Cache Keys
+// ============================================
+
+export const KV_KEYS = {
+  course: (code: string) => `course:${code}`,
+  outline: (code: string) => `outline:${code}`,
+  outlineEdited: (sessionId: string) => `outline:edited:${sessionId}`,
+  instructor: (sfuId: string) => `instructor:${sfuId}`,
+} as const;
+
+export const KV_TTL = {
+  COURSE: 60 * 60 * 24, // 24 hours
+  OUTLINE: 60 * 60 * 24, // 24 hours
+  INSTRUCTOR: 60 * 60 * 24, // 24 hours
+} as const;

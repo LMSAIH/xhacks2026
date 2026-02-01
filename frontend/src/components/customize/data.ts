@@ -120,14 +120,14 @@ export const CHARACTERS: Character[] = [
   },
 ];
 
-// Voice options data - matches backend Deepgram Aura voices
+// Voice options data - Cloudflare Workers AI / Deepgram Aura voices
 export interface Voice {
   id: string;
   name: string;
   description: string;
   personality: string;
-  gender?: 'male' | 'female';
-  bestFor?: string[];
+  gender: "male" | "female";
+  bestFor: string[];
 }
 
 // Default voices (fallback if backend is unavailable)
@@ -137,7 +137,7 @@ export const VOICES: Voice[] = [
     id: "aura-asteria-en",
     name: "Asteria",
     description: "Warm & professional",
-    personality: "Perfect for general tutoring, math, and science",
+    personality: "Friendly and approachable, perfect for general tutoring",
     gender: "female",
     bestFor: ["general tutoring", "math", "science"],
   },
@@ -145,7 +145,7 @@ export const VOICES: Voice[] = [
     id: "aura-luna-en",
     name: "Luna",
     description: "Soft & calm",
-    personality: "Ideal for meditation, language learning, and bedtime stories",
+    personality: "Gentle and patient, great for relaxed learning",
     gender: "female",
     bestFor: ["meditation", "language learning", "bedtime stories"],
   },
@@ -153,7 +153,7 @@ export const VOICES: Voice[] = [
     id: "aura-athena-en",
     name: "Athena",
     description: "Confident & clear",
-    personality: "Great for business, presentations, and leadership topics",
+    personality: "Assertive and articulate, ideal for business topics",
     gender: "female",
     bestFor: ["business", "presentations", "leadership"],
   },
@@ -161,7 +161,7 @@ export const VOICES: Voice[] = [
     id: "aura-hera-en",
     name: "Hera",
     description: "Mature & authoritative",
-    personality: "Excellent for history, philosophy, and advanced topics",
+    personality: "Wise and commanding, perfect for advanced subjects",
     gender: "female",
     bestFor: ["history", "philosophy", "advanced topics"],
   },
@@ -169,7 +169,7 @@ export const VOICES: Voice[] = [
     id: "aura-orion-en",
     name: "Orion",
     description: "Deep & professional",
-    personality: "Perfect for engineering, technical topics, and podcasts",
+    personality: "Thoughtful and knowledgeable, great for technical topics",
     gender: "male",
     bestFor: ["engineering", "technical topics", "podcasts"],
   },
@@ -177,7 +177,7 @@ export const VOICES: Voice[] = [
     id: "aura-arcas-en",
     name: "Arcas",
     description: "Young & energetic",
-    personality: "Great for gaming, sports, and youth content",
+    personality: "Enthusiastic and lively, ideal for engaging content",
     gender: "male",
     bestFor: ["gaming", "sports", "youth content"],
   },
@@ -185,7 +185,7 @@ export const VOICES: Voice[] = [
     id: "aura-perseus-en",
     name: "Perseus",
     description: "Warm & friendly",
-    personality: "Ideal for customer service, tutorials, and general content",
+    personality: "Approachable and helpful, versatile for any subject",
     gender: "male",
     bestFor: ["customer service", "tutorials", "general"],
   },
@@ -193,7 +193,7 @@ export const VOICES: Voice[] = [
     id: "aura-angus-en",
     name: "Angus",
     description: "British & refined",
-    personality: "Perfect for literature, arts, and sophisticated topics",
+    personality: "Sophisticated and eloquent, perfect for literature",
     gender: "male",
     bestFor: ["literature", "arts", "sophisticated topics"],
   },
@@ -201,7 +201,7 @@ export const VOICES: Voice[] = [
     id: "aura-orpheus-en",
     name: "Orpheus",
     description: "Smooth storyteller",
-    personality: "Excellent for narratives, audiobooks, and creative writing",
+    personality: "Captivating narrator, ideal for creative content",
     gender: "male",
     bestFor: ["narratives", "audiobooks", "creative writing"],
   },
@@ -209,7 +209,7 @@ export const VOICES: Voice[] = [
     id: "aura-helios-en",
     name: "Helios",
     description: "Clear news anchor",
-    personality: "Great for news, announcements, and formal content",
+    personality: "Crisp and professional, great for formal content",
     gender: "male",
     bestFor: ["news", "announcements", "formal content"],
   },
@@ -217,7 +217,7 @@ export const VOICES: Voice[] = [
     id: "aura-zeus-en",
     name: "Zeus",
     description: "Powerful & commanding",
-    personality: "Perfect for motivation, leadership, and epic content",
+    personality: "Bold and inspiring, perfect for motivation",
     gender: "male",
     bestFor: ["motivation", "leadership", "epic content"],
   },

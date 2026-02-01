@@ -3,10 +3,10 @@ import type { Env } from '../types';
 import type { ServerMessage, ClientMessage } from '../types';
 import { 
   type DeepgramVoice, 
-  getVoiceModelId, 
   getDefaultVoiceForCourse,
   buildSystemPrompt,
-  VOICES
+  VOICES,
+  getSpeakerName
 } from '../voices';
 
 // Latency-optimized constants
@@ -279,7 +279,7 @@ export class VoiceTeacherSession extends DurableObject<Env> {
     if (!this.config || !this.isProcessing) return;
 
     const voice = this.config.voice;
-    const voiceModel = getVoiceModelId(voice);
+    const speakerName = getSpeakerName(voice);
 
     // Split into sentences for pipelined TTS
     const sentences = this.splitIntoSentences(text);
@@ -291,21 +291,17 @@ export class VoiceTeacherSession extends DurableObject<Env> {
       if (!sentence.trim()) continue;
 
       try {
-        // @ts-expect-error - model exists in Workers AI
-        const ttsResult = await this.env.AI.run(voiceModel, {
+        // Use Aura-1 model with speaker parameter
+        const ttsResult = await this.env.AI.run('@cf/deepgram/aura-1', {
           text: sentence,
-        }) as Uint8Array | { audio: Uint8Array };
+          speaker: speakerName,
+        }, { returnRawResponse: true }) as Response;
 
         if (!this.isProcessing) break;
 
-        let audioBytes: Uint8Array;
-        if (ttsResult instanceof Uint8Array) {
-          audioBytes = ttsResult;
-        } else if (ttsResult && 'audio' in ttsResult) {
-          audioBytes = ttsResult.audio;
-        } else {
-          continue;
-        }
+        // Get audio bytes from response
+        const audioBuffer = await ttsResult.arrayBuffer();
+        const audioBytes = new Uint8Array(audioBuffer);
 
         // Stream in smaller chunks for faster first byte
         const totalChunks = Math.ceil(audioBytes.length / CHUNK_SIZE);

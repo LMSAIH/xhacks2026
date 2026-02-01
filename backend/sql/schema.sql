@@ -126,6 +126,61 @@ CREATE INDEX IF NOT EXISTS idx_progress_course ON progress(course_id);
 CREATE INDEX IF NOT EXISTS idx_progress_mastery ON progress(mastery_score);
 
 -- ============================================
+-- Instructors Table (Cached from SFU API with RateMyProf data)
+-- ============================================
+CREATE TABLE IF NOT EXISTS instructors (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  sfu_id TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  department TEXT,
+  rating REAL,
+  review_count INTEGER,
+  would_take_again REAL,
+  difficulty REAL,
+  raw_data TEXT,  -- Full JSON from SFU API
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_instructors_sfu_id ON instructors(sfu_id);
+CREATE INDEX IF NOT EXISTS idx_instructors_name ON instructors(name);
+CREATE INDEX IF NOT EXISTS idx_instructors_department ON instructors(department);
+
+-- ============================================
+-- Course Sessions Table (Links user choices to session)
+-- ============================================
+CREATE TABLE IF NOT EXISTS course_sessions (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  course_code TEXT NOT NULL,
+  instructor_id TEXT,
+  voice_config TEXT,  -- JSON: voiceId, settings
+  personality_config TEXT,  -- JSON: traits, systemPrompt
+  outline_version TEXT,  -- Points to outlines_edited.id if modified
+  vectorize_ref TEXT,  -- Reference to Vectorize index/namespace
+  rag_chunk_count INTEGER DEFAULT 0,
+  personality_prompt TEXT,  -- Generated prompt for AI
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (instructor_id) REFERENCES instructors(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_sessions_course ON course_sessions(course_code);
+CREATE INDEX IF NOT EXISTS idx_course_sessions_created ON course_sessions(created_at);
+
+-- ============================================
+-- Edited Outlines Table (Session-scoped, not persistent)
+-- ============================================
+CREATE TABLE IF NOT EXISTS outlines_edited (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  session_id TEXT NOT NULL,
+  course_code TEXT NOT NULL,
+  outline_json TEXT NOT NULL,  -- JSON: topics, learningObjectives, courseTopics, summary
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_outlines_edited_session ON outlines_edited(session_id);
+CREATE INDEX IF NOT EXISTS idx_outlines_edited_course ON outlines_edited(course_code);
+
+-- ============================================
 -- Triggers for updated_at
 -- ============================================
 CREATE TRIGGER IF NOT EXISTS update_users_timestamp 
@@ -138,6 +193,12 @@ CREATE TRIGGER IF NOT EXISTS update_progress_timestamp
 AFTER UPDATE ON progress
 BEGIN
   UPDATE progress SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS update_instructors_timestamp 
+AFTER UPDATE ON instructors
+BEGIN
+  UPDATE instructors SET updated_at = datetime('now') WHERE id = NEW.id;
 END;
 
 -- ============================================

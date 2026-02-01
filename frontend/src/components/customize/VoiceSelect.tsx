@@ -1,3 +1,6 @@
+import { useState, useRef } from "react";
+import { Play, Square, Loader2 } from "lucide-react";
+import { VOICES } from "./data";
 import type { Voice } from "./data";
 import {
   StepTitle,
@@ -5,7 +8,9 @@ import {
   HelpText,
 } from "./Typography";
 import { BlurFade } from "@/components/ui/blur-fade";
-import { useVoices } from "@/hooks/use-backend-config";
+
+// Backend URL for voice preview API
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace('ws://', 'http://').replace('wss://', 'https://') || 'http://localhost:8787';
 
 interface VoiceSelectProps {
   selectedId: string | null;
@@ -22,14 +27,68 @@ export function VoiceSelect({
   onBack,
   onContinue,
 }: VoiceSelectProps) {
-  // Fetch voices from backend (falls back to local VOICES if unavailable)
-  const { voices, loading } = useVoices();
+  const [loadingVoice, setLoadingVoice] = useState<string | null>(null);
+  const [playingVoice, setPlayingVoice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const playPreview = (voiceId: string) => {
-    const audio = new Audio(`/samples/${voiceId}.mp3`);
-    audio.play().catch(() => {
-      console.log("Voice sample not available");
-    });
+  const stopCurrentAudio = () => {
+    if (audioRef.current) {
+      // Remove event listeners before stopping to prevent false error events
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setPlayingVoice(null);
+  };
+
+  const playPreview = async (voiceId: string) => {
+    // If same voice is playing, stop it
+    if (playingVoice === voiceId) {
+      stopCurrentAudio();
+      return;
+    }
+
+    // Stop any currently playing audio
+    stopCurrentAudio();
+    setError(null);
+    setLoadingVoice(voiceId);
+
+    try {
+      // Fetch audio from backend TTS API
+      const response = await fetch(`${BACKEND_URL}/api/voices/${voiceId}/preview`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to load voice preview`);
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      
+      audio.onended = () => {
+        setPlayingVoice(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.onerror = () => {
+        setError("Failed to play audio");
+        setPlayingVoice(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      await audio.play();
+      setPlayingVoice(voiceId);
+    } catch (err) {
+      console.error("Voice preview error:", err);
+      setError("Voice preview unavailable. Try again later.");
+    } finally {
+      setLoadingVoice(null);
+    }
   };
 
   return (
@@ -45,26 +104,30 @@ export function VoiceSelect({
         </div>
       </BlurFade>
 
-      {/* Loading state */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="text-muted-foreground">Loading voices...</div>
-        </div>
-      ) : (
-        /* Voice Grid */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-          {voices.map((voice, index) => (
-            <BlurFade key={voice.id} delay={0.15 + index * 0.05}>
-              <VoiceCard
-                voice={voice}
-                isSelected={selectedId === voice.id}
-                onSelect={() => onSelect(voice.id)}
-                onPlayPreview={() => playPreview(voice.id)}
-              />
-            </BlurFade>
-          ))}
-        </div>
+      {/* Error message */}
+      {error && (
+        <BlurFade delay={0.1}>
+          <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 text-sm text-center">
+            {error}
+          </div>
+        </BlurFade>
       )}
+
+      {/* Voice Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+        {VOICES.map((voice, index) => (
+          <BlurFade key={voice.id} delay={0.15 + index * 0.05}>
+            <VoiceCard
+              voice={voice}
+              isSelected={selectedId === voice.id}
+              isLoading={loadingVoice === voice.id}
+              isPlaying={playingVoice === voice.id}
+              onSelect={() => onSelect(voice.id)}
+              onPlayPreview={() => playPreview(voice.id)}
+            />
+          </BlurFade>
+        ))}
+      </div>
 
       {/* Tip */}
       <BlurFade delay={0.4}>
@@ -83,14 +146,14 @@ export function VoiceSelect({
             onClick={onBack}
             className="px-4 py-2.5 border border-border text-sm hover:border-foreground transition-colors"
           >
-            ← Back
+            &larr; Back
           </button>
           <button
             onClick={onContinue}
             disabled={!selectedId}
             className="px-6 py-2.5 bg-foreground text-background text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-colors"
           >
-            Continue →
+            Continue &rarr;
           </button>
         </div>
       </BlurFade>
@@ -101,11 +164,15 @@ export function VoiceSelect({
 function VoiceCard({
   voice,
   isSelected,
+  isLoading,
+  isPlaying,
   onSelect,
   onPlayPreview,
 }: {
   voice: Voice;
   isSelected: boolean;
+  isLoading: boolean;
+  isPlaying: boolean;
   onSelect: () => void;
   onPlayPreview: () => void;
 }) {
@@ -120,8 +187,10 @@ function VoiceCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className={`font-semibold ${isSelected ? "text-background" : "text-foreground"}`}>
-            {voice.name}
+          <div className="mb-1">
+            <span className={`font-semibold ${isSelected ? "text-background" : "text-foreground"}`}>
+              {voice.name}
+            </span>
           </div>
           <div className={`text-xs mb-1 ${isSelected ? "text-background/70" : "text-muted-foreground"}`}>
             {voice.description}
@@ -129,6 +198,21 @@ function VoiceCard({
           <p className={`text-xs line-clamp-2 ${isSelected ? "text-background/80" : "text-foreground/80"}`}>
             {voice.personality}
           </p>
+          {/* Best for tags */}
+          <div className="flex flex-wrap gap-1 mt-2">
+            {voice.bestFor.slice(0, 2).map((tag) => (
+              <span
+                key={tag}
+                className={`text-[10px] px-1.5 py-0.5 rounded ${
+                  isSelected
+                    ? "bg-background/10 text-background/70"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Play button */}
@@ -137,20 +221,27 @@ function VoiceCard({
             e.stopPropagation();
             onPlayPreview();
           }}
+          disabled={isLoading}
           className={`w-8 h-8 flex items-center justify-center border transition-colors shrink-0 ${
             isSelected
               ? "border-background/30 text-background hover:bg-background/10"
               : "border-border text-foreground hover:bg-muted"
-          }`}
+          } ${isLoading ? "opacity-50 cursor-wait" : ""}`}
           aria-label={`Play ${voice.name} voice preview`}
         >
-          <span>▶</span>
+          {isLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : isPlaying ? (
+            <Square className="w-4 h-4 fill-current" />
+          ) : (
+            <Play className="w-4 h-4 fill-current" />
+          )}
         </button>
       </div>
 
       {isSelected && (
         <div className="mt-2 pt-2 border-t border-background/20 text-xs text-background/80">
-          ✓ Selected
+          Selected
         </div>
       )}
     </button>

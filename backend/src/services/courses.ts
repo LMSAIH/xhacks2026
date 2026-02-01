@@ -1,4 +1,4 @@
-import type { Env } from '../types';
+import type { Env, CourseWithInstructor, Instructor } from '../types';
 
 interface SFUCourse {
   dept: string;
@@ -16,6 +16,123 @@ interface SFUCourse {
     term: string;
     instructors?: string[];
   }>;
+}
+
+// KV cache keys and TTL
+const KV_KEYS = {
+  course: (code: string) => `course:${code}`,
+  courseWithInstructor: (code: string) => `course:instructor:${code}`,
+  allCourses: 'courses:all',
+};
+
+const KV_TTL = {
+  COURSE: 60 * 60 * 24, // 24 hours
+};
+
+/**
+ * Get course with instructor from SFU API (with KV caching)
+ */
+export async function getCourseWithInstructor(
+  env: Env,
+  courseCode: string
+): Promise<CourseWithInstructor | null> {
+  const cacheKey = KV_KEYS.courseWithInstructor(courseCode);
+
+  // Check KV cache first
+  const cached = await env.KV.get(cacheKey, 'json');
+  if (cached) {
+    return cached as CourseWithInstructor;
+  }
+
+  // Fetch from SFU API
+  try {
+    const response = await fetch('https://api.sfucourses.com/v1/rest/outlines');
+    if (!response.ok) {
+      return null;
+    }
+
+    const courses: SFUCourse[] = await response.json();
+    const [dept, number] = courseCode.split(' ');
+    const course = courses.find(
+      (c) => c.dept === dept && c.number === number
+    );
+
+    if (!course) {
+      return null;
+    }
+
+    // Extract instructor from most recent offering
+    let instructor: Instructor | null = null;
+    if (course.offerings && course.offerings.length > 0) {
+      const latestOffering = course.offerings[0];
+      if (latestOffering.instructors && latestOffering.instructors.length > 0) {
+        const instructorName = latestOffering.instructors[0];
+        instructor = {
+          sfuId: instructorName.toLowerCase().replace(/\s+/g, '-'),
+          name: instructorName,
+          department: course.dept,
+        };
+      }
+    }
+
+    const result: CourseWithInstructor = {
+      course: {
+        code: `${course.dept} ${course.number}`,
+        title: course.title,
+        description: course.description,
+        prerequisites: course.prerequisites,
+        units: course.units,
+      },
+      instructor,
+    };
+
+    // Cache the result
+    await env.KV.put(cacheKey, JSON.stringify(result), {
+      expirationTtl: KV_TTL.COURSE,
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Error fetching course with instructor:', error);
+    return null;
+  }
+}
+
+/**
+ * Search courses from KV cache or SFU API
+ */
+export async function searchCourses(
+  env: Env,
+  query: string
+): Promise<SFUCourse[]> {
+  // Check if we have all courses cached
+  const cached = await env.KV.get(KV_KEYS.allCourses, 'json');
+  let courses: SFUCourse[];
+
+  if (cached) {
+    courses = cached as SFUCourse[];
+  } else {
+    // Fetch from SFU API
+    const response = await fetch('https://api.sfucourses.com/v1/rest/outlines');
+    if (!response.ok) {
+      return [];
+    }
+    courses = await response.json();
+
+    // Cache all courses
+    await env.KV.put(KV_KEYS.allCourses, JSON.stringify(courses), {
+      expirationTtl: KV_TTL.COURSE,
+    });
+  }
+
+  // Filter by query
+  const lowerQuery = query.toLowerCase();
+  return courses.filter(
+    (c) =>
+      `${c.dept} ${c.number}`.toLowerCase().includes(lowerQuery) ||
+      c.title.toLowerCase().includes(lowerQuery) ||
+      c.description?.toLowerCase().includes(lowerQuery)
+  );
 }
 
 export async function updateCoursesFromAPI(env: Env, term: string): Promise<{

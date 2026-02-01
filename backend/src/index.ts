@@ -1,7 +1,10 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { Env } from './types';
-import { updateCoursesFromAPI, getCourses, getCourseByCode, getCourse } from './services/courses';
+import type { Env, SessionCreate } from './types';
+import { updateCoursesFromAPI, getCourses, getCourseByCode, getCourse, getCourseWithInstructor, searchCourses } from './services/courses';
+import { getCourseOutline, storeEditedOutline, getOutline } from './services/outline';
+import { createSession, getSession } from './services/sessions';
+import { queryRagContext } from './services/rag';
 import { VOICES } from './voices';
 
 // Export Durable Object (use v2 for optimized voice)
@@ -15,9 +18,88 @@ app.use('*', cors({
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 
-// Health check
+// Health check - basic
 app.get('/', (c) => c.json({ status: 'ok', service: 'SFU AI Teacher', version: '2.0' }));
-app.get('/health', (c) => c.json({ status: 'healthy' }));
+
+// Health check - comprehensive with database validation
+app.get('/health', async (c) => {
+  const checks: Record<string, { status: string; latency?: number; error?: string; details?: unknown }> = {};
+  let overallHealthy = true;
+
+  // Check D1 Database
+  const dbStart = Date.now();
+  try {
+    const result = await c.env.DB.prepare('SELECT COUNT(*) as count FROM sfu_courses').first<{ count: number }>();
+    checks.database = {
+      status: 'healthy',
+      latency: Date.now() - dbStart,
+      details: { courseCount: result?.count ?? 0 },
+    };
+  } catch (error) {
+    overallHealthy = false;
+    checks.database = {
+      status: 'unhealthy',
+      latency: Date.now() - dbStart,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+
+  // Check KV Namespace
+  const kvStart = Date.now();
+  try {
+    await c.env.KV.get('health-check-probe');
+    checks.kv = {
+      status: 'healthy',
+      latency: Date.now() - kvStart,
+    };
+  } catch (error) {
+    overallHealthy = false;
+    checks.kv = {
+      status: 'unhealthy',
+      latency: Date.now() - kvStart,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+
+  // Check Vectorize (remote binding)
+  const vectorizeStart = Date.now();
+  try {
+    // Query with empty vector to test connectivity
+    await c.env.VECTORIZE.query([0], { topK: 1 });
+    checks.vectorize = {
+      status: 'healthy',
+      latency: Date.now() - vectorizeStart,
+    };
+  } catch (error) {
+    // Vectorize may fail in local dev without remote, don't mark as critical
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    const isLocalDevError = errorMsg.includes('not supported') || errorMsg.includes('local');
+    if (!isLocalDevError) {
+      overallHealthy = false;
+    }
+    checks.vectorize = {
+      status: isLocalDevError ? 'unavailable' : 'unhealthy',
+      latency: Date.now() - vectorizeStart,
+      error: errorMsg,
+    };
+  }
+
+  // Check Workers AI
+  checks.ai = {
+    status: c.env.AI ? 'available' : 'unavailable',
+  };
+
+  // Check Durable Objects
+  checks.durableObjects = {
+    status: c.env.VOICE_SESSION ? 'available' : 'unavailable',
+  };
+
+  return c.json({
+    status: overallHealthy ? 'healthy' : 'degraded',
+    timestamp: new Date().toISOString(),
+    checks,
+  }, overallHealthy ? 200 : 503);
+});
 
 // === VOICE & PERSONA ENDPOINTS ===
 
@@ -31,6 +113,94 @@ app.get('/api/voices', (c) => {
     bestFor: v.bestFor,
   }));
   return c.json({ voices });
+});
+
+// Voice sample texts for preview
+const VOICE_SAMPLES: Record<string, string> = {
+  'aura-asteria-en': "Hi there! I'm Asteria, and I'll be your tutor today. Let's explore this topic together and make learning enjoyable.",
+  'aura-luna-en': "Hello. I'm Luna, and I'm here to guide you through your studies in a calm, relaxed way. Take your time.",
+  'aura-athena-en': "Good day. I'm Athena. I'll provide you with clear, confident explanations to help you master this material.",
+  'aura-hera-en': "Welcome. I am Hera. With years of wisdom to share, I'll help you understand even the most complex topics.",
+  'aura-orion-en': "Hey there. I'm Orion. I specialize in technical subjects and will break down complex concepts for you.",
+  'aura-arcas-en': "What's up! I'm Arcas, and I'm super excited to learn with you today! Let's dive right in!",
+  'aura-perseus-en': "Hello friend! I'm Perseus. I'm here to help you learn in a warm, supportive environment.",
+  'aura-angus-en': "Good afternoon. I'm Angus. Allow me to guide you through this subject with proper attention to detail.",
+  'aura-orpheus-en': "Greetings, learner. I'm Orpheus. Let me tell you a story about what we're going to explore today.",
+  'aura-helios-en': "Hello and welcome. I'm Helios. I'll deliver clear, precise information to help you succeed.",
+  'aura-zeus-en': "Welcome, student! I am Zeus. Together, we shall conquer this subject and achieve greatness!",
+};
+
+// Deepgram Aura speaker names (must match Cloudflare Workers AI types)
+type DeepgramSpeaker = 'asteria' | 'luna' | 'athena' | 'hera' | 'orion' | 'arcas' | 'perseus' | 'angus' | 'orpheus' | 'helios' | 'zeus' | 'stella';
+
+// Map voice IDs to Deepgram Aura speaker names
+const VOICE_TO_SPEAKER: Record<string, DeepgramSpeaker> = {
+  'aura-asteria-en': 'asteria',
+  'aura-luna-en': 'luna',
+  'aura-athena-en': 'athena',
+  'aura-hera-en': 'hera',
+  'aura-orion-en': 'orion',
+  'aura-arcas-en': 'arcas',
+  'aura-perseus-en': 'perseus',
+  'aura-angus-en': 'angus',
+  'aura-orpheus-en': 'orpheus',
+  'aura-helios-en': 'helios',
+  'aura-zeus-en': 'zeus',
+};
+
+// Generate TTS preview for a voice
+app.get('/api/voices/:voiceId/preview', async (c) => {
+  const voiceId = c.req.param('voiceId');
+  
+  // Validate voice ID
+  if (!VOICES[voiceId as keyof typeof VOICES]) {
+    return c.json({ success: false, error: 'Invalid voice ID' }, 400);
+  }
+
+  // Check KV cache first
+  const cacheKey = `voice-preview:${voiceId}`;
+  const cached = await c.env.KV.get(cacheKey, 'arrayBuffer');
+  if (cached) {
+    return new Response(cached, {
+      headers: {
+        'Content-Type': 'audio/mpeg',
+        'Cache-Control': 'public, max-age=86400',
+      },
+    });
+  }
+
+  // Get sample text and speaker name for this voice
+  const sampleText = VOICE_SAMPLES[voiceId] || "Hello! I'm your AI tutor. Let's start learning together.";
+  const speaker: DeepgramSpeaker = VOICE_TO_SPEAKER[voiceId] ?? 'angus';
+
+  try {
+    // Generate TTS using Workers AI - Deepgram Aura model
+    // With returnRawResponse: true, we get a Response object
+    const ttsResult = await c.env.AI.run('@cf/deepgram/aura-1', {
+      text: sampleText,
+      speaker: speaker,
+    }, {
+      returnRawResponse: true,
+    }) as Response;
+
+    const audioBytes = await ttsResult.arrayBuffer();
+    
+    // Cache the result for 24 hours
+    await c.env.KV.put(cacheKey, audioBytes, { expirationTtl: 86400 });
+
+    return new Response(audioBytes, {
+      headers: {
+        'Content-Type': 'audio/mpeg',
+        'Cache-Control': 'public, max-age=86400',
+      },
+    });
+  } catch (error) {
+    console.error('TTS preview error:', error);
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'TTS generation failed' 
+    }, 500);
+  }
 });
 
 // Combined config endpoint for frontend initialization
@@ -67,6 +237,23 @@ app.get('/api/courses', async (c) => {
   return c.json({ courses });
 });
 
+// Search courses with query (must be before :name route)
+app.get('/api/courses/search', async (c) => {
+  const query = c.req.query('q') || '';
+  if (!query) {
+    return c.json({ success: false, error: 'Query parameter q is required' }, 400);
+  }
+  const courses = await searchCourses(c.env, query);
+  return c.json({ success: true, data: { courses } });
+});
+
+// Get specific course by id (must be before :name route)
+app.get('/api/courses/id/:id', async (c) => {
+  const id = c.req.param('id');
+  const course = await getCourse(c.env, { id });
+  return c.json({ course });
+});
+
 // Get specific course by name
 app.get('/api/courses/:name', async (c) => {
   const name = c.req.param('name');
@@ -74,11 +261,154 @@ app.get('/api/courses/:name', async (c) => {
   return c.json({ course });
 });
 
-// Get specific course by id
-app.get('/api/courses/id/:id', async (c) => {
-  const id = c.req.param('id');
-  const course = await getCourse(c.env, { id });
-  return c.json({ course });
+// Get course with instructor (from SFU API with RateMyProf data)
+app.get('/api/courses/:code/details', async (c) => {
+  const code = c.req.param('code');
+  const result = await getCourseWithInstructor(c.env, code);
+  if (!result) {
+    return c.json({ success: false, error: 'Course not found' }, 404);
+  }
+  return c.json({ success: true, data: result });
+});
+
+// === OUTLINE ENDPOINTS ===
+
+// Get course outline
+app.get('/api/courses/:code/outline', async (c) => {
+  const code = c.req.param('code');
+  const sessionId = c.req.query('sessionId');
+
+  let outline;
+  if (sessionId) {
+    // Get outline (edited if exists, else original)
+    outline = await getOutline(c.env, sessionId, code);
+  } else {
+    // Get original outline
+    outline = await getCourseOutline(c.env, code);
+  }
+
+  if (!outline) {
+    return c.json({ success: false, error: 'Outline not found' }, 404);
+  }
+
+  return c.json({
+    success: true,
+    data: {
+      courseCode: code,
+      outline,
+      modified: sessionId ? true : false,
+    },
+  });
+});
+
+// Store edited outline (session-scoped)
+app.put('/api/courses/:code/outline', async (c) => {
+  const code = c.req.param('code');
+
+  try {
+    const body = await c.req.json<{
+      sessionId: string;
+      outline: {
+        topics: string[];
+        learningObjectives: string[];
+        courseTopics: string[];
+        summary: string;
+      };
+    }>();
+
+    if (!body.sessionId) {
+      return c.json({ success: false, error: 'sessionId is required' }, 400);
+    }
+
+    if (!body.outline) {
+      return c.json({ success: false, error: 'outline is required' }, 400);
+    }
+
+    await storeEditedOutline(c.env, body.sessionId, code, body.outline);
+
+    return c.json({
+      success: true,
+      message: 'Outline updated for session',
+      data: {
+        sessionId: body.sessionId,
+        outline: body.outline,
+      },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ success: false, error: errorMessage }, 400);
+  }
+});
+
+// === SESSION ENDPOINTS ===
+
+// Create session with all user choices
+app.post('/api/sessions', async (c) => {
+  try {
+    const body = await c.req.json<SessionCreate>();
+
+    // Validate required fields
+    if (!body.courseCode) {
+      return c.json({ success: false, error: 'courseCode is required' }, 400);
+    }
+
+    if (!body.instructor || !body.instructor.sfuId || !body.instructor.name) {
+      return c.json({ success: false, error: 'instructor with sfuId and name is required' }, 400);
+    }
+
+    if (!body.voiceConfig || !body.voiceConfig.voiceId) {
+      return c.json({ success: false, error: 'voiceConfig with voiceId is required' }, 400);
+    }
+
+    if (!body.personalityConfig || !body.personalityConfig.systemPrompt) {
+      return c.json({ success: false, error: 'personalityConfig with systemPrompt is required' }, 400);
+    }
+
+    const result = await createSession(c.env, body);
+
+    return c.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ success: false, error: errorMessage }, 500);
+  }
+});
+
+// Get session by ID
+app.get('/api/sessions/:id', async (c) => {
+  const sessionId = c.req.param('id');
+  const session = await getSession(c.env, sessionId);
+
+  if (!session) {
+    return c.json({ success: false, error: 'Session not found' }, 404);
+  }
+
+  return c.json({ success: true, data: session });
+});
+
+// Get RAG context for a session (query during conversation)
+app.get('/api/sessions/:id/rag', async (c) => {
+  const sessionId = c.req.param('id');
+  const query = c.req.query('q');
+
+  if (!query) {
+    return c.json({ success: false, error: 'Query parameter q is required' }, 400);
+  }
+
+  const topK = parseInt(c.req.query('topK') || '5', 10);
+  const chunks = await queryRagContext(c.env, sessionId, query, topK);
+
+  return c.json({
+    success: true,
+    data: {
+      sessionId,
+      query,
+      chunks,
+      chunkCount: chunks.length,
+    },
+  });
 });
 
 // Progress API - TODO: Implement
