@@ -4,7 +4,7 @@ import type { Env } from './types';
 import { VOICES } from './voices';
 
 // Export Durable Object (use v2 for optimized voice)
-export { VoiceTeacherSession } from './durable-objects/voice-session-v2';
+export { VoiceTeacherSession } from './durable-objects/voice-session';
 
 const app = new Hono<{ Bindings: Env }>();
 

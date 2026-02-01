@@ -1,5 +1,5 @@
 /**
- * SFU AI Teacher - Types
+ * SFU AI Teacher - Types (Streaming Optimized + Multi-Voice)
  */
 
 // Cloudflare Bindings
@@ -16,16 +16,17 @@ export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking' | 'int
 
 // Client -> Server messages
 export type ClientMessage =
-  | { type: 'start_session'; courseCode: string; userId?: string }
-  | { type: 'audio'; audio: string }
+  | { type: 'start_session'; courseCode: string; userId?: string; voice?: string; ragContext?: string; customInstructions?: string }
+  | { type: 'audio'; audio: string | ArrayBuffer; sequence?: number }
   | { type: 'text'; text: string }
   | { type: 'interrupt' }
-  | { type: 'clear_history' };
+  | { type: 'clear_history' }
+  | { type: 'set_voice'; voice: string };
 
-// Server -> Client messages (v2 with streaming support)
+// Server -> Client messages (streaming + voice support)
 export type ServerMessage =
-  | { type: 'ready'; sessionId: string }
-  | { type: 'session_started'; sessionId: string }
+  | { type: 'ready'; sessionId: string; voices?: string[] }
+  | { type: 'session_started'; sessionId: string; voice?: string }
   | { type: 'state_change'; state: VoiceState }
   | { type: 'transcript_partial'; text: string }
   | { type: 'transcript'; text: string; isUser: boolean }
@@ -35,6 +36,7 @@ export type ServerMessage =
   | { type: 'interrupted' }
   | { type: 'cleared' }
   | { type: 'interrupt_detected' }
+  | { type: 'voice_changed'; voice: string }
   | { type: 'error'; message: string };
 
 // LLM Response

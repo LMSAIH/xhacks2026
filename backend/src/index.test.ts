@@ -4,7 +4,7 @@ import { VOICES } from './voices';
 import type { Env } from './types';
 
 // Mock the Durable Object export
-vi.mock('./durable-objects/voice-session-v2', () => ({
+vi.mock('./durable-objects/voice-session', () => ({
   VoiceTeacherSession: class VoiceTeacherSession {
     fetch() {
       return Promise.resolve(new Response('WebSocket mock'));
