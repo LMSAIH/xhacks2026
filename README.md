@@ -28,7 +28,7 @@ A real-time voice-based AI tutoring platform. Pick a topic, have a spoken conver
 Run the interactive TUI setup wizard:
 
 ```bash
-./scripts/setup-local.sh
+./scripts/TUI.sh
 ```
 
 This will guide you through:
