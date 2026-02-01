@@ -1,5 +1,5 @@
 #!/bin/bash
-# SFU AI Teacher - Interactive Local Development Setup TUI
+# Learn LM - Interactive Local Development Setup TUI
 # A beautiful terminal UI for setting up your development environment
 
 set -e
@@ -51,27 +51,31 @@ BG_WHITE='\033[47m'
 # Terminal Utilities
 # ============================================
 get_terminal_width() {
-    tput cols 2>/dev/null || echo 80
+    local width
+    width=$(tput cols 2>/dev/null) || width=${COLUMNS:-80}
+    echo "${width:-80}"
 }
 
 get_terminal_height() {
-    tput lines 2>/dev/null || echo 24
+    local height
+    height=$(tput lines 2>/dev/null) || height=${LINES:-24}
+    echo "${height:-24}"
 }
 
 clear_screen() {
-    printf '\033[2J\033[H'
+    printf '\033[2J\033[H' >&2
 }
 
 hide_cursor() {
-    printf '\033[?25l'
+    printf '\033[?25l' >&2
 }
 
 show_cursor() {
-    printf '\033[?25h'
+    printf '\033[?25h' >&2
 }
 
 move_cursor() {
-    printf '\033[%d;%dH' "$1" "$2"
+    printf '\033[%d;%dH' "$1" "$2" >&2
 }
 
 # ============================================
@@ -82,60 +86,58 @@ draw_box() {
     local title="${5:-}"
     
     # Box drawing characters
-    local tl="╭" tr="╮" bl="╰" br="╯" h="─" v="│"
+    local tl="+" tr="+" bl="+" br="+" h="-" v="|"
     
     # Top border
     move_cursor $y $x
-    printf "${CYAN}${tl}"
-    for ((i=0; i<width-2; i++)); do printf "${h}"; done
-    printf "${tr}${RESET}"
+    printf "${CYAN}${tl}" >&2
+    for ((i=0; i<width-2; i++)); do printf "${h}" >&2; done
+    printf "${tr}${RESET}" >&2
     
     # Title if provided
     if [[ -n "$title" ]]; then
         local title_len=${#title}
         local title_pos=$((x + (width - title_len - 2) / 2))
         move_cursor $y $title_pos
-        printf "${CYAN}${BOLD} ${title} ${RESET}"
+        printf "${CYAN}${BOLD} ${title} ${RESET}" >&2
     fi
     
     # Sides
     for ((row=1; row<height-1; row++)); do
         move_cursor $((y + row)) $x
-        printf "${CYAN}${v}${RESET}"
+        printf "${CYAN}${v}${RESET}" >&2
         move_cursor $((y + row)) $((x + width - 1))
-        printf "${CYAN}${v}${RESET}"
+        printf "${CYAN}${v}${RESET}" >&2
     done
     
     # Bottom border
     move_cursor $((y + height - 1)) $x
-    printf "${CYAN}${bl}"
-    for ((i=0; i<width-2; i++)); do printf "${h}"; done
-    printf "${br}${RESET}"
+    printf "${CYAN}${bl}" >&2
+    for ((i=0; i<width-2; i++)); do printf "${h}" >&2; done
+    printf "${br}${RESET}" >&2
 }
 
 draw_header() {
     local width=$(get_terminal_width)
+    local center=$(( (width - 44) / 2 ))
+    [[ $center -lt 1 ]] && center=1
     
     clear_screen
     
-    # ASCII Art Logo
-    printf "${BRIGHT_CYAN}${BOLD}"
-    move_cursor 2 $(( (width - 52) / 2 ))
-    echo "   _____ ______ _    _            _____ _______ "
-    move_cursor 3 $(( (width - 52) / 2 ))
-    echo "  / ____|  ____| |  | |     /\   |_   _|__   __|"
-    move_cursor 4 $(( (width - 52) / 2 ))
-    echo " | (___ | |__  | |  | |    /  \    | |    | |   "
-    move_cursor 5 $(( (width - 52) / 2 ))
-    echo "  \___ \|  __| | |  | |   / /\ \   | |    | |   "
-    move_cursor 6 $(( (width - 52) / 2 ))
-    echo "  ____) | |    | |__| |  / ____ \ _| |_   | |   "
-    move_cursor 7 $(( (width - 52) / 2 ))
-    echo " |_____/|_|     \____/  /_/    \_\_____|  |_|   "
-    printf "${RESET}"
+    # ASCII Art Logo - Learn LM
+    move_cursor 2 $center
+    printf "${BRIGHT_CYAN}${BOLD} _                            _     __  __ ${RESET}" >&2
+    move_cursor 3 $center
+    printf "${BRIGHT_CYAN}${BOLD}| |    ___  __ _ _ __ _ __   | |   |  \\/  |${RESET}" >&2
+    move_cursor 4 $center
+    printf "${BRIGHT_CYAN}${BOLD}| |   / _ \\/ _\` | '__| '_ \\  | |   | |\\/| |${RESET}" >&2
+    move_cursor 5 $center
+    printf "${BRIGHT_CYAN}${BOLD}| |__|  __/ (_| | |  | | | | | |___| |  | |${RESET}" >&2
+    move_cursor 6 $center
+    printf "${BRIGHT_CYAN}${BOLD}|_____\\___|\\__,_|_|  |_| |_| |_____|_|  |_|${RESET}" >&2
     
-    move_cursor 9 $(( (width - 30) / 2 ))
-    printf "${DIM}AI Teacher - Development Setup${RESET}"
+    move_cursor 8 $(( (width - 26) / 2 ))
+    printf "${DIM}AI Tutor - Development Setup${RESET}" >&2
 }
 
 draw_menu() {
@@ -146,39 +148,46 @@ draw_menu() {
     local num_options=${#options[@]}
     
     local width=$(get_terminal_width)
-    local height=$(get_terminal_height)
     local menu_width=50
     local menu_height=$((num_options + 4))
     local start_x=$(( (width - menu_width) / 2 ))
-    local start_y=12
+    [[ $start_x -lt 1 ]] && start_x=1
+    local start_y=11
+    
+    # Initial draw - send to stderr so it doesn't interfere with return value
+    draw_box $start_x $start_y $menu_width $menu_height "$title" >&2
     
     while true; do
-        # Draw menu box
-        draw_box $start_x $start_y $menu_width $menu_height "$title"
-        
         # Draw options
         for i in "${!options[@]}"; do
-            move_cursor $((start_y + 2 + i)) $((start_x + 3))
+            move_cursor $((start_y + 2 + i)) $((start_x + 3)) >&2
             if [[ $i -eq $selected ]]; then
-                printf "${REVERSE}${BRIGHT_WHITE}  ▸ %-$((menu_width - 10))s  ${RESET}" "${options[$i]}"
+                printf "${REVERSE}${BRIGHT_WHITE}  > %-$((menu_width - 10))s  ${RESET}" "${options[$i]}" >&2
             else
-                printf "${WHITE}    %-$((menu_width - 10))s  ${RESET}" "${options[$i]}"
+                printf "${WHITE}    %-$((menu_width - 10))s  ${RESET}" "${options[$i]}" >&2
             fi
         done
         
         # Instructions
-        move_cursor $((start_y + menu_height + 1)) $((start_x + 2))
-        printf "${DIM}↑/↓ Navigate  •  Enter Select  •  q Quit${RESET}"
+        move_cursor $((start_y + menu_height + 1)) $((start_x + 2)) >&2
+        printf "${DIM}Up/Down: Navigate | Enter: Select | q: Quit${RESET}" >&2
         
-        # Read key
-        read -rsn1 key
+        # Read key - handle escape sequences for arrow keys
+        IFS= read -rsn1 key
+        
+        # Check for escape sequence (arrow keys)
+        if [[ "$key" == $'\x1b' ]]; then
+            read -rsn2 -t 0.1 rest
+            key+="$rest"
+        fi
+        
         case "$key" in
-            A|k) # Up arrow or k
-                ((selected--))
+            $'\x1b[A'|k) # Up arrow or k
+                ((selected--)) || true
                 [[ $selected -lt 0 ]] && selected=$((num_options - 1))
                 ;;
-            B|j) # Down arrow or j
-                ((selected++))
+            $'\x1b[B'|j) # Down arrow or j
+                ((selected++)) || true
                 [[ $selected -ge $num_options ]] && selected=0
                 ;;
             '') # Enter
@@ -659,7 +668,7 @@ main_menu() {
             6|-1) # Exit
                 clear_screen
                 show_cursor
-                printf "${GREEN}Thanks for using SFU AI Teacher Setup!${RESET}\n\n"
+                printf "${GREEN}Thanks for using Learn LM Setup!${RESET}\n\n"
                 exit 0
                 ;;
         esac
