@@ -81,13 +81,12 @@ app.get('/api/tools', (_req: Request, res: Response) => {
 // Ask AI / Chat message (stateless)
 app.post('/api/ask', async (req: Request, res: Response) => {
   try {
-    const { message, question, course_code, section_title, persona_id, voice_mode } = req.body;
+    const { message, question, course_code, courseCode, persona_id, persona, voice_mode, voiceMode } = req.body;
     const result = await chatMessage({
       message: message || question || '',
-      course_code,
-      section_title,
-      persona_id,
-      voice_mode: voice_mode ?? true,
+      courseCode: courseCode || course_code,
+      persona: persona || persona_id,
+      voiceMode: voiceMode ?? voice_mode ?? true,
     });
     res.json({ response: result.response });
   } catch (e) {
@@ -98,11 +97,11 @@ app.post('/api/ask', async (req: Request, res: Response) => {
 // Explain a concept
 app.post('/api/explain', async (req: Request, res: Response) => {
   try {
-    const { concept, course_code, difficulty } = req.body;
+    const { concept, course_code, courseCode, difficulty, depth } = req.body;
     if (!concept) {
       return res.status(400).json({ error: 'concept required' });
     }
-    const result = await explainConcept({ concept, course_code, difficulty });
+    const result = await explainConcept({ concept, courseCode: courseCode || course_code, depth: depth || difficulty });
     res.json({ response: result.explanation });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -112,11 +111,11 @@ app.post('/api/explain', async (req: Request, res: Response) => {
 // Critique notes
 app.post('/api/critique', async (req: Request, res: Response) => {
   try {
-    const { notes, course_code, topic } = req.body;
+    const { notes, course_code, courseCode, topic } = req.body;
     if (!notes) {
       return res.status(400).json({ error: 'notes required' });
     }
-    const result = await critiqueNotes({ notes, course_code, topic });
+    const result = await critiqueNotes({ notes, courseCode: courseCode || course_code, focusAreas: topic ? [topic] : undefined });
     res.json({ response: result.critique });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -126,11 +125,11 @@ app.post('/api/critique', async (req: Request, res: Response) => {
 // Get formulas
 app.post('/api/formulas', async (req: Request, res: Response) => {
   try {
-    const { topic, course_code } = req.body;
+    const { topic, course_code, courseCode } = req.body;
     if (!topic) {
       return res.status(400).json({ error: 'topic required' });
     }
-    const result = await getFormulas({ topic, course_code });
+    const result = await getFormulas({ topic, courseCode: courseCode || course_code });
     res.json({ response: result.formulas });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -140,14 +139,17 @@ app.post('/api/formulas', async (req: Request, res: Response) => {
 // Generate diagram
 app.post('/api/diagram', async (req: Request, res: Response) => {
   try {
-    const { concept, style } = req.body;
-    if (!concept) {
-      return res.status(400).json({ error: 'concept required' });
+    const { concept, description, style, source } = req.body;
+    const diagramDescription = description || concept;
+    if (!diagramDescription) {
+      return res.status(400).json({ error: 'description or concept required' });
     }
-    const result = await generateDiagram({ concept, style });
+    const result = await generateDiagram({ description: diagramDescription, style, source: source || 'webapp' });
     res.json({
-      imageUrl: result.image_url,
-      description: result.description,
+      imageUrl: result.image,
+      image: result.image,
+      description: result.diagramDescription || result.description,
+      mode: result.mode,
     });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -157,11 +159,15 @@ app.post('/api/diagram', async (req: Request, res: Response) => {
 // Suggest improvements
 app.post('/api/suggest', async (req: Request, res: Response) => {
   try {
-    const { notes, course_code, topic } = req.body;
+    const { notes, course_code, courseCode, topic, section } = req.body;
     if (!notes) {
       return res.status(400).json({ error: 'notes required' });
     }
-    const result = await suggestImprovements({ notes, course_code, topic });
+    const code = courseCode || course_code;
+    if (!code) {
+      return res.status(400).json({ error: 'courseCode required' });
+    }
+    const result = await suggestImprovements({ notes, courseCode: code, section: section || topic });
     res.json({ response: result.suggestions });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -179,7 +185,7 @@ app.get('/api/courses/search', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'query (q) required' });
     }
     const result = await searchCourses({ query, limit });
-    res.json({ results: result.results });
+    res.json({ results: result.courses, total: result.total });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -188,8 +194,8 @@ app.get('/api/courses/search', async (req: Request, res: Response) => {
 // Get course outline
 app.get('/api/courses/:courseCode/outline', async (req: Request, res: Response) => {
   try {
-    const course_code = req.params.courseCode;
-    const result = await getCourseOutlineTool({ course_code });
+    const courseCode = req.params.courseCode;
+    const result = await getCourseOutlineTool({ courseCode });
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -199,8 +205,8 @@ app.get('/api/courses/:courseCode/outline', async (req: Request, res: Response) 
 // Get instructor info
 app.get('/api/instructors/:name', async (req: Request, res: Response) => {
   try {
-    const instructor_name = req.params.name;
-    const result = await getInstructorInfo({ instructor_name });
+    const name = req.params.name;
+    const result = await getInstructorInfo({ name });
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -230,8 +236,12 @@ app.get('/api/voices/:courseCode', (req: Request, res: Response) => {
 // Start tutoring session
 app.post('/api/session/start', async (req: Request, res: Response) => {
   try {
-    const { course_code, topic, persona_id, custom_instructions } = req.body;
-    const result = await startSession({ course_code, topic, persona_id, custom_instructions });
+    const { course_code, courseCode, topic, persona_id, persona, custom_instructions, metadata } = req.body;
+    const result = await startSession({ 
+      courseCode: courseCode || course_code, 
+      persona: persona || persona_id,
+      metadata: metadata || (custom_instructions ? { customInstructions: custom_instructions } : undefined),
+    });
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -241,12 +251,12 @@ app.post('/api/session/start', async (req: Request, res: Response) => {
 // Ask question in session
 app.post('/api/session/:sessionId/ask', async (req: Request, res: Response) => {
   try {
-    const session_id = req.params.sessionId;
+    const sessionId = req.params.sessionId;
     const { question, include_context } = req.body;
     if (!question) {
       return res.status(400).json({ error: 'question required' });
     }
-    const result = await askQuestion({ session_id, question, include_context });
+    const result = await askQuestion({ sessionId, question });
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -256,8 +266,8 @@ app.post('/api/session/:sessionId/ask', async (req: Request, res: Response) => {
 // End session
 app.post('/api/session/:sessionId/end', async (req: Request, res: Response) => {
   try {
-    const session_id = req.params.sessionId;
-    const result = await endSession({ session_id });
+    const sessionId = req.params.sessionId;
+    const result = await endSession({ sessionId });
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: String(e) });
