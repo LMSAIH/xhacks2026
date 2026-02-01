@@ -6,6 +6,8 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	// Enable workers.dev subdomain
+	"workers_dev": true,
 	// Custom domain route for API
 	"routes": [
 		{
