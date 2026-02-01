@@ -10,7 +10,8 @@ import {
 } from '../voices';
 
 // Latency-optimized constants
-const CHUNK_SIZE = 4096; // Smaller chunks = faster first byte
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const CHUNK_SIZE = 4096; // Smaller chunks = faster first byte (reserved for streaming)
 const MAX_HISTORY = 6; // Fewer messages = faster LLM
 const MAX_TOKENS = 100; // Shorter responses = faster TTS
 const AUTO_INIT_TIMEOUT_MS = 5000; // Auto-initialize after 5 seconds if no start_session
@@ -257,7 +258,7 @@ export class VoiceTeacherSession extends DurableObject<Env> {
     }
 
     // @ts-expect-error - model exists in Workers AI
-    const llmResult = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+    const llmResult = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct-fast', {
       messages: recentHistory,
       max_tokens: MAX_TOKENS,
     }) as { response?: string };

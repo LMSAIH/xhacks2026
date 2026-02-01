@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
+import { streamSSE } from 'hono/streaming';
 import type { Env } from '../types';
+import { getPrecachedOutline } from '../services/precache';
 
 // Outline item structure matching frontend expectations
 export interface OutlineItem {
@@ -104,7 +106,8 @@ Make the outline:
 3. Include hands-on exercises or activities where appropriate
 4. ${character?.name ? `Reflect ${character.name}'s unique teaching perspective` : 'Be engaging and accessible'}`;
 
-    const llmResponse = await c.env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+    // @ts-expect-error - Model name is valid but not in local type definitions
+    const llmResponse = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
       messages: [
         {
           role: 'system',
@@ -145,7 +148,7 @@ Make the outline:
 
     try {
       parsedOutline = JSON.parse(cleanedContent);
-    } catch (parseError) {
+    } catch {
       console.error('Failed to parse outline:', cleanedContent);
       return c.json({ success: false, error: 'Failed to parse outline' }, 500);
     }
@@ -200,6 +203,253 @@ Make the outline:
       error: 'Failed to generate outline',
     }, 500);
   }
+});
+
+/**
+ * Generate a course outline with streaming - sends sections as they're generated
+ * GET /api/outlines/generate/stream?topic=...&character=...&difficulty=...
+ * 
+ * Returns Server-Sent Events (SSE) stream with events:
+ * - section: A new section was generated
+ * - metadata: Learning objectives, duration, difficulty
+ * - complete: Generation finished
+ * - error: An error occurred
+ */
+outlineRoutes.get('/generate/stream', async (c) => {
+  const topic = c.req.query('topic');
+  const characterJson = c.req.query('character');
+  const difficulty = c.req.query('difficulty') || 'intermediate';
+
+  if (!topic?.trim()) {
+    return c.json({ success: false, error: 'Topic is required' }, 400);
+  }
+
+  // Check for pre-cached outline first
+  const cached = await getPrecachedOutline(c.env, topic);
+  if (cached) {
+    // Stream the cached outline
+    return streamSSE(c, async (stream) => {
+      // Send each section with a small delay for UI effect
+      for (let i = 0; i < cached.sections.length; i++) {
+        await stream.writeSSE({
+          event: 'section',
+          data: JSON.stringify({
+            index: i,
+            section: cached.sections[i],
+            total: cached.sections.length,
+          }),
+        });
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Send metadata
+      await stream.writeSSE({
+        event: 'metadata',
+        data: JSON.stringify({
+          learningObjectives: cached.learningObjectives,
+          estimatedDuration: cached.estimatedDuration,
+          difficulty: cached.difficulty,
+        }),
+      });
+
+      // Send complete
+      await stream.writeSSE({
+        event: 'complete',
+        data: JSON.stringify({
+          id: cached.id,
+          topic: cached.topic,
+          cached: true,
+        }),
+      });
+    });
+  }
+
+  const character = characterJson ? JSON.parse(characterJson) : undefined;
+
+  // Build character context for the prompt
+  let characterContext = '';
+  if (character?.name) {
+    characterContext = `The course will be taught by ${character.name}`;
+    if (character.teachingStyle) {
+      characterContext += `, who teaches with this style: "${character.teachingStyle}"`;
+    }
+    characterContext += '. Tailor the outline to match their teaching approach.';
+  }
+
+  // For streaming, we generate sections one at a time
+  return streamSSE(c, async (stream) => {
+    const outlineId = `outline-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const sections: OutlineItem[] = [];
+
+    try {
+      // First, get the overall structure (just titles)
+      const structurePrompt = `For the topic "${topic}", generate a course outline structure.
+${characterContext}
+Difficulty: ${difficulty}
+
+Return ONLY valid JSON with 5-7 section titles:
+{
+  "sectionTitles": ["Section 1 title", "Section 2 title", ...],
+  "learningObjectives": ["Objective 1", "Objective 2", "Objective 3"],
+  "estimatedDuration": "2 hours",
+  "difficulty": "${difficulty}"
+}`;
+
+      // @ts-expect-error - Model name is valid but not in local type definitions
+      const structureResponse = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        messages: [
+          { role: 'system', content: 'You are a curriculum designer. Respond with ONLY valid JSON.' },
+          { role: 'user', content: structurePrompt },
+        ],
+        max_tokens: 512,
+      }) as AIResponse;
+
+      let structure: {
+        sectionTitles: string[];
+        learningObjectives: string[];
+        estimatedDuration: string;
+        difficulty: string;
+      };
+
+      try {
+        let content = structureResponse.response || '{}';
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) content = jsonMatch[0];
+        structure = JSON.parse(content);
+      } catch {
+        structure = {
+          sectionTitles: ['Introduction', 'Core Concepts', 'Applications', 'Practice', 'Summary'],
+          learningObjectives: [],
+          estimatedDuration: '2 hours',
+          difficulty: difficulty,
+        };
+      }
+
+      // Send metadata early
+      await stream.writeSSE({
+        event: 'metadata',
+        data: JSON.stringify({
+          learningObjectives: structure.learningObjectives,
+          estimatedDuration: structure.estimatedDuration,
+          difficulty: structure.difficulty,
+          totalSections: structure.sectionTitles.length,
+        }),
+      });
+
+      // Generate each section in detail
+      for (let i = 0; i < structure.sectionTitles.length; i++) {
+        const sectionTitle = structure.sectionTitles[i];
+        
+        const sectionPrompt = `Create detailed content for section ${i + 1} of a course on "${topic}".
+
+Section title: "${sectionTitle}"
+${characterContext}
+
+Return ONLY valid JSON:
+{
+  "id": "${i + 1}",
+  "number": "${i + 1}",
+  "title": "${sectionTitle}",
+  "description": "What this section covers",
+  "duration": "15 min",
+  "children": [
+    {
+      "id": "${i + 1}.1",
+      "number": "${i + 1}.1",
+      "title": "Subsection title",
+      "description": "What this covers",
+      "duration": "5 min"
+    }
+  ]
+}
+
+Include 2-4 subsections with practical content.`;
+
+        // @ts-expect-error - Model name is valid but not in local type definitions
+        const sectionResponse = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+          messages: [
+            { role: 'system', content: 'You are a curriculum designer. Respond with ONLY valid JSON.' },
+            { role: 'user', content: sectionPrompt },
+          ],
+          max_tokens: 1024,
+        }) as AIResponse;
+
+        try {
+          let content = sectionResponse.response || '{}';
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) content = jsonMatch[0];
+          const section = JSON.parse(content) as OutlineItem;
+          
+          sections.push(section);
+
+          // Stream the section to the client
+          await stream.writeSSE({
+            event: 'section',
+            data: JSON.stringify({
+              index: i,
+              section,
+              total: structure.sectionTitles.length,
+            }),
+          });
+        } catch {
+          // Fallback section
+          const fallbackSection: OutlineItem = {
+            id: String(i + 1),
+            number: String(i + 1),
+            title: sectionTitle,
+            description: `Content about ${sectionTitle}`,
+            duration: '15 min',
+            children: [],
+          };
+          sections.push(fallbackSection);
+
+          await stream.writeSSE({
+            event: 'section',
+            data: JSON.stringify({
+              index: i,
+              section: fallbackSection,
+              total: structure.sectionTitles.length,
+            }),
+          });
+        }
+      }
+
+      // Store the complete outline in D1
+      const now = new Date().toISOString();
+      await c.env.DB.prepare(`
+        INSERT INTO course_outlines (id, topic, character_json, outline_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).bind(
+        outlineId,
+        topic,
+        character ? JSON.stringify(character) : null,
+        JSON.stringify({
+          sections,
+          learningObjectives: structure.learningObjectives,
+          estimatedDuration: structure.estimatedDuration,
+          difficulty: structure.difficulty,
+        }),
+        now,
+        now
+      ).run();
+
+      // Send complete event
+      await stream.writeSSE({
+        event: 'complete',
+        data: JSON.stringify({
+          id: outlineId,
+          topic,
+          cached: false,
+        }),
+      });
+    } catch (error) {
+      console.error('Streaming outline error:', error);
+      await stream.writeSSE({
+        event: 'error',
+        data: JSON.stringify({ error: 'Failed to generate outline' }),
+      });
+    }
+  });
 });
 
 /**
@@ -496,7 +746,8 @@ Return ONLY a valid JSON object (no markdown):
   ]
 }`;
 
-    const llmResponse = await c.env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+    // @ts-expect-error - Model name is valid but not in local type definitions
+    const llmResponse = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
       messages: [
         {
           role: 'system',
@@ -518,7 +769,6 @@ Return ONLY a valid JSON object (no markdown):
 
     const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
 
-    let newSection: OutlineItem;
     let cleanedContent = contentStr.trim();
     if (cleanedContent.startsWith('```json')) cleanedContent = cleanedContent.slice(7);
     if (cleanedContent.startsWith('```')) cleanedContent = cleanedContent.slice(3);
@@ -528,7 +778,7 @@ Return ONLY a valid JSON object (no markdown):
     const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
     if (jsonMatch) cleanedContent = jsonMatch[0];
 
-    newSection = JSON.parse(cleanedContent);
+    const newSection: OutlineItem = JSON.parse(cleanedContent);
 
     // Update the section in the outline
     const now = new Date().toISOString();

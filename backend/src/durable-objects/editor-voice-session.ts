@@ -283,7 +283,7 @@ export class EditorVoiceSession extends DurableObject<Env> {
 
     // Generate LLM response
     // @ts-expect-error - model exists in Workers AI
-    const llmResponse = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+    const llmResponse = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct-fast', {
       messages: trimmedHistory,
       max_tokens: MAX_TOKENS,
       temperature: 0.7,

@@ -102,6 +102,19 @@ For each formula:
 - Give a brief example of when to use it
 
 Be practical and focus on what students actually need for problem-solving.`,
+
+  suggest: `You are a knowledgeable tutor helping a student expand their notes.
+Based on the current notes content and topic, suggest additional content that would be valuable to add.
+Never refer to yourself as "AI" - speak as a helpful teacher.
+
+Generate 2-4 paragraphs of suggested content that:
+- Builds on what the student has already written
+- Adds related concepts, examples, or explanations
+- Uses clear, educational language
+- Includes formulas in LaTeX ($$formula$$) if relevant
+
+Format the suggestions as ready-to-add note content with markdown formatting.
+Start directly with the content, don't preface it with "Here are some suggestions".`,
 };
 
 type ToolType = keyof typeof SYSTEM_PROMPTS;
@@ -153,6 +166,7 @@ async function runTool(
   }
 
   // Call Workers AI
+  // @ts-expect-error - model exists in Workers AI but not in local types
   const response = await env.AI.run(LLM_MODEL, {
     messages: [
       { role: 'system', content: systemPrompt },
@@ -258,4 +272,18 @@ export async function getFormulas(
 ): Promise<string> {
   const prompt = `What are the key formulas for: ${topic}`;
   return runTool(env, 'formulas', prompt, options);
+}
+
+/**
+ * Suggest additional notes content based on current notes
+ */
+export async function suggestNotes(
+  env: Env,
+  currentNotes: string,
+  options: AIToolOptions = {}
+): Promise<string> {
+  const prompt = currentNotes.trim().length > 10
+    ? `Based on these current notes, suggest additional content to add:\n\n${currentNotes}`
+    : `Generate some starter notes for a student. Include key concepts, definitions, and examples.`;
+  return runTool(env, 'suggest', prompt, options);
 }

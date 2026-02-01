@@ -58,8 +58,9 @@ Return ONLY a valid JSON array with NO markdown formatting, NO code blocks, NO e
 
 Focus on finding real, verifiable experts with well-documented contributions. Include diverse perspectives. For images, use real Wikipedia/Wikimedia URLs you're confident exist.`;
 
-    // Use Llama 3.3 70B - best large model for knowledge and reasoning
-    const response = await c.env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+    // Use Llama 3.1 8B - fast model for quick responses
+    // @ts-expect-error - Model name is valid but not in local type definitions
+    const response = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
       messages: [
         {
           role: 'system',
@@ -120,7 +121,7 @@ Focus on finding real, verifiable experts with well-documented contributions. In
         description: expert.description || '',
         teachingStyle: expert.teachingStyle || 'Shares knowledge through clear explanations',
       }));
-    } catch (parseError) {
+    } catch {
       console.error('Failed to parse AI response:', content);
       return c.json({
         success: false,
@@ -282,7 +283,8 @@ For each expert, you MUST provide all these fields:
 Return ONLY a valid JSON array with NO markdown formatting, NO code blocks:
 [{"id":"...","name":"...","title":"...","era":"...","description":"...","teachingStyle":"..."}]`;
 
-    const llmResponse = await c.env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+    // @ts-expect-error - Model name is valid but not in local type definitions
+    const llmResponse = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
       messages: [
         {
           role: 'system',
@@ -306,7 +308,6 @@ Return ONLY a valid JSON array with NO markdown formatting, NO code blocks:
     const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
 
     // Parse experts
-    let experts: Character[];
     let cleanedContent = contentStr.trim();
     if (cleanedContent.startsWith('```json')) cleanedContent = cleanedContent.slice(7);
     if (cleanedContent.startsWith('```')) cleanedContent = cleanedContent.slice(3);
@@ -316,7 +317,7 @@ Return ONLY a valid JSON array with NO markdown formatting, NO code blocks:
     const jsonMatch = cleanedContent.match(/\[[\s\S]*\]/);
     if (jsonMatch) cleanedContent = jsonMatch[0];
     
-    experts = JSON.parse(cleanedContent);
+    const experts: Character[] = JSON.parse(cleanedContent);
 
     // Step 2: Generate images concurrently
     const imagePromises = experts.map(async (expert) => {
@@ -420,7 +421,8 @@ Examples:
 - "A wise wizard" → Patient and mystical, using magical analogies
 - "My grandma" → Warm and nurturing, using everyday examples`;
 
-    const llmResponse = await c.env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+    // @ts-expect-error - Model name is valid but not in local type definitions
+    const llmResponse = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
       messages: [
         {
           role: 'system',
@@ -444,7 +446,6 @@ Examples:
     const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
 
     // Parse character details
-    let character: Character;
     let cleanedContent = contentStr.trim();
     if (cleanedContent.startsWith('```json')) cleanedContent = cleanedContent.slice(7);
     if (cleanedContent.startsWith('```')) cleanedContent = cleanedContent.slice(3);
@@ -454,7 +455,7 @@ Examples:
     const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
     if (jsonMatch) cleanedContent = jsonMatch[0];
 
-    character = JSON.parse(cleanedContent);
+    const character: Character = JSON.parse(cleanedContent);
 
     // Step 2: Generate an image for the character
     const imgPrompt = `Portrait illustration of ${character.name}, ${character.title || 'character'}. ${character.description || ''}. High quality, expressive, character portrait, artistic style, vibrant colors, detailed.`;

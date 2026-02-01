@@ -10,6 +10,7 @@ import {
   explainConcept,
   critiqueNotesWithDiff,
   getFormulas,
+  suggestNotes,
 } from '../services/ai-tools';
 
 const editorChatRoutes = new Hono<{ Bindings: Env }>();
@@ -30,32 +31,36 @@ interface ChatSession {
 const sessions = new Map<string, ChatSession>();
 
 // Slash command patterns - detect "slash" spoken aloud
+// Handles variations like "slash", "flash" (common mishearing), with/without arguments
 const SLASH_COMMAND_PATTERNS = [
-  // "slash critique my notes" / "slash critique notes" / "slash critique"
-  { pattern: /^slash\s+critique(\s+my)?\s*(notes)?/i, command: 'critique' },
-  // "slash explain <topic>" 
-  { pattern: /^slash\s+explain\s+(.+)/i, command: 'explain', extractArg: true },
-  // "slash ask <question>"
-  { pattern: /^slash\s+ask\s+(.+)/i, command: 'ask', extractArg: true },
-  // "slash formulas <topic>" / "slash get formulas <topic>"
-  { pattern: /^slash\s+(get\s+)?formulas?\s+(.+)/i, command: 'formulas', extractArg: true, argIndex: 2 },
+  // "slash critique my notes" / "slash critique notes" / "slash critique" / "flash critique"
+  { pattern: /^(?:slash|flash)\s+critiqu?e?(\s+my)?(\s+notes)?/i, command: 'critique' },
+  // "slash explain <topic>" - argument optional, can be empty
+  { pattern: /^(?:slash|flash)\s+explain(?:\s+(.*))?/i, command: 'explain', extractArg: true },
+  // "slash ask <question>" - argument optional
+  { pattern: /^(?:slash|flash)\s+ask(?:\s+(.*))?/i, command: 'ask', extractArg: true },
+  // "slash formulas <topic>" / "slash get formulas <topic>" - argument optional
+  { pattern: /^(?:slash|flash)\s+(?:get\s+)?formulas?(?:\s+(.*))?/i, command: 'formulas', extractArg: true },
+  // "slash suggest" / "slash suggest notes"
+  { pattern: /^(?:slash|flash)\s+suggest(?:\s+notes)?/i, command: 'suggest' },
 ];
 
 interface SlashCommand {
-  command: 'critique' | 'explain' | 'ask' | 'formulas';
+  command: 'critique' | 'explain' | 'ask' | 'formulas' | 'suggest';
   argument?: string;
 }
 
 function parseSlashCommand(text: string): SlashCommand | null {
-  const normalized = text.trim().toLowerCase();
+  const normalized = text.trim();
   
-  for (const { pattern, command, extractArg, argIndex } of SLASH_COMMAND_PATTERNS) {
+  for (const { pattern, command, extractArg } of SLASH_COMMAND_PATTERNS) {
     const match = normalized.match(pattern);
     if (match) {
       const result: SlashCommand = { command: command as SlashCommand['command'] };
-      if (extractArg && match[argIndex ?? 1]) {
-        result.argument = match[argIndex ?? 1].trim();
+      if (extractArg && match[1]) {
+        result.argument = match[1].trim();
       }
+      console.log(`Parsed slash command: ${command}, arg: ${result.argument || '(none)'}`);
       return result;
     }
   }
@@ -148,6 +153,16 @@ async function executeSlashCommand(
         commandType: 'formulas',
         data: { topic: cmd.argument, formulas },
         spokenResponse: `Here are the key formulas for ${cmd.argument}. I've added them to your notes.`,
+      };
+    }
+    
+    case 'suggest': {
+      const suggestions = await suggestNotes(env, notesContent || '');
+      return {
+        response: suggestions,
+        commandType: 'suggest',
+        data: { suggestions },
+        spokenResponse: 'I\'ve generated some suggested notes based on your current content. Check them out in the editor.',
       };
     }
     
@@ -298,7 +313,7 @@ editorChatRoutes.post('/session/:sessionId/chat', async (c) => {
 
   // Generate LLM response
   // @ts-expect-error - model exists in Workers AI
-  const llmResult = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+  const llmResult = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct-fast', {
     messages: recentHistory,
     max_tokens: 150,
     temperature: 0.7,
@@ -388,7 +403,7 @@ editorChatRoutes.post('/session/:sessionId/voice', async (c) => {
 
       // Generate LLM response
       // @ts-expect-error - model exists in Workers AI
-      const llmResult = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+      const llmResult = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct-fast', {
         messages: recentHistory,
         max_tokens: 150,
         temperature: 0.7,
@@ -461,6 +476,59 @@ editorChatRoutes.post('/session/:sessionId/clear', async (c) => {
   session.history = session.history.slice(0, 1);
   
   return c.json({ success: true });
+});
+
+// Summarize conversation for notes
+editorChatRoutes.post('/session/:sessionId/summarize', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  const session = sessions.get(sessionId);
+  
+  if (!session) {
+    return c.json({ error: 'Session not found' }, 404);
+  }
+
+  // Get conversation messages (excluding system prompt)
+  const conversation = session.history
+    .slice(1) // Skip system prompt
+    .filter(msg => msg.role !== 'system')
+    .map(msg => `${msg.role === 'user' ? 'Student' : session.config.professorName}: ${msg.content}`)
+    .join('\n');
+  
+  if (!conversation.trim()) {
+    return c.json({ summary: null, message: 'No conversation to summarize' });
+  }
+
+  try {
+    // Use LLM to summarize
+    // @ts-expect-error - model exists in Workers AI
+    const result = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct-fast', {
+      messages: [
+        {
+          role: 'system',
+          content: `You are a helpful assistant that summarizes learning conversations into concise study notes.
+Create bullet points that capture the key concepts, questions answered, and important information discussed.
+Keep it brief (3-5 bullet points max) and focused on what would be useful for studying.
+Format as markdown bullet points.`,
+        },
+        {
+          role: 'user',
+          content: `Summarize this tutoring conversation into study notes:\n\n${conversation}`,
+        },
+      ],
+      max_tokens: 300,
+      temperature: 0.5,
+    }) as { response?: string };
+
+    const summary = result.response?.trim() || null;
+    
+    return c.json({ 
+      summary,
+      messageCount: session.history.length - 1, // Exclude system prompt
+    });
+  } catch (e) {
+    console.error('Summarize error:', e);
+    return c.json({ error: String(e) }, 500);
+  }
 });
 
 // Delete session
