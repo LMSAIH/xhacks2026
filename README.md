@@ -107,6 +107,41 @@ learnlm/
 └── docs/                     # Documentation
 ```
 
+## MCP Server Integration
+
+LearnLM includes an MCP server that integrates with AI coding assistants (VS Code, Cursor, Claude Desktop, OpenCode). Get tutoring help, search courses, and critique notes directly from your IDE.
+
+### Quick Setup
+
+1. **Build the server:**
+   ```bash
+   cd docker/mcp-server
+   npm install && npm run build
+   ```
+
+2. **Add to VS Code** (settings.json):
+   ```json
+   {
+     "mcp": {
+       "servers": {
+         "learnlm": {
+           "command": "node",
+           "args": ["/path/to/learnlm/docker/mcp-server/dist/index.js"],
+           "env": {
+             "OPENAI_API_KEY": "sk-your-key"
+           }
+         }
+       }
+     }
+   }
+   ```
+
+3. **Use in chat:** `@learnlm search for CMPT 225`
+
+**20 tools available:** Tutoring sessions, course search, prerequisite lookup, document critique, note suggestions, voice selection, and more.
+
+For detailed setup instructions for all IDEs, see [docs/MCP.md](docs/MCP.md).
+
 ## Documentation
 
 | Document | Description |

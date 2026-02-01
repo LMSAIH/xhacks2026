@@ -19,11 +19,12 @@ The MCP server is a standalone Node.js application that exposes tutoring capabil
 │                      MCP Server                              │
 │                     (Node.js + TypeScript)                   │
 ├─────────────────────────────────────────────────────────────┤
-│  Tools (16)           │  Resources         │  Prompts        │
-│  - Tutoring           │  - Session state   │  - System       │
-│  - Courses            │  - Course data     │    prompts      │
-│  - Notes              │                    │                 │
-│  - Voice              │                    │                 │
+│  Tools (20)           │  Resources         │  Prompts        │
+│  - Tutoring (4)       │  - Session state   │  - System       │
+│  - Courses (4)        │  - Course data     │    prompts      │
+│  - Documents (4)      │                    │                 │
+│  - Notes (5)          │                    │                 │
+│  - Voice/Persona (3)  │                    │                 │
 └─────────────────────────────────────────────────────────────┘
                               │
               ┌───────────────┼───────────────┐
@@ -35,78 +36,187 @@ The MCP server is a standalone Node.js application that exposes tutoring capabil
        └───────────┘   └───────────┘   └───────────┘
 ```
 
-## Installation
+## Adding LearnLM to Your AI Tools
+
+LearnLM provides an MCP server that integrates with AI coding assistants like VS Code Copilot, Cursor, Claude Desktop, and OpenCode. Once configured, you can ask your AI assistant to search courses, get tutoring help, critique your notes, and more.
 
 ### Prerequisites
 
-- Node.js 18+
-- Docker (optional, for containerized deployment)
-- OpenAI API key
+1. **Build the MCP server** (one-time setup):
+   ```bash
+   cd docker/mcp-server
+   npm install
+   npm run build
+   ```
 
-### Local Setup
+2. **Get an OpenAI API key** from [platform.openai.com](https://platform.openai.com)
 
-```bash
-cd docker/mcp-server
+3. **Note the full path** to the built server:
+   ```bash
+   # Get the absolute path (you'll need this for configuration)
+   echo "$(pwd)/dist/index.js"
+   # Example: /home/user/learnlm/docker/mcp-server/dist/index.js
+   ```
 
-# Install dependencies
-npm install
+---
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your API keys
+### VS Code (GitHub Copilot)
 
-# Build
-npm run build
+1. Open VS Code Settings (`Ctrl+,` or `Cmd+,`)
+2. Search for "mcp" 
+3. Click "Edit in settings.json"
+4. Add the LearnLM server configuration:
 
-# Run
-npm start
+```json
+{
+  "mcp": {
+    "servers": {
+      "learnlm": {
+        "command": "node",
+        "args": ["/full/path/to/docker/mcp-server/dist/index.js"],
+        "env": {
+          "OPENAI_API_KEY": "sk-your-openai-key"
+        }
+      }
+    }
+  }
+}
 ```
 
-### Docker Setup
+5. Restart VS Code
+6. Open Copilot Chat and try: `@learnlm search for CMPT 225`
 
-```bash
-cd docker/mcp-server
+---
 
-# Build image
-docker build -t learnlm-mcp .
+### Cursor
 
-# Run container
-docker run -p 3000:3000 \
-  -e OPENAI_API_KEY=your-key \
-  -e CLOUDFLARE_ACCOUNT_ID=your-account \
-  -e CLOUDFLARE_API_TOKEN=your-token \
-  learnlm-mcp
-```
+1. Open Cursor Settings (`Ctrl+,` or `Cmd+,`)
+2. Go to **Features** > **MCP Servers**
+3. Click **Add Server** and enter:
 
-## Configuration
+| Field | Value |
+|-------|-------|
+| Name | `learnlm` |
+| Command | `node` |
+| Arguments | `/full/path/to/docker/mcp-server/dist/index.js` |
 
-### Environment Variables
+4. Add environment variable: `OPENAI_API_KEY` = `sk-your-key`
+5. Restart Cursor
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | OpenAI API key for GPT-4o and DALL-E 3 |
-| `CLOUDFLARE_ACCOUNT_ID` | No | Cloudflare account ID for AI Search |
-| `CLOUDFLARE_API_TOKEN` | No | Cloudflare API token |
-| `DATABASE_PATH` | No | Path to SQLite database (default: `./data/learnlm.db`) |
-| `PORT` | No | Server port (default: 3000) |
-
-### Claude Desktop Integration
-
-Add to your Claude Desktop configuration (`claude_desktop_config.json`):
+Or edit `~/.cursor/mcp.json` directly:
 
 ```json
 {
   "mcpServers": {
     "learnlm": {
       "command": "node",
-      "args": ["/path/to/docker/mcp-server/dist/index.js"],
+      "args": ["/full/path/to/docker/mcp-server/dist/index.js"],
       "env": {
-        "OPENAI_API_KEY": "your-key"
+        "OPENAI_API_KEY": "sk-your-openai-key"
       }
     }
   }
 }
 ```
+
+---
+
+### Claude Desktop
+
+1. Open the Claude Desktop config file:
+   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+   - **Linux**: `~/.config/Claude/claude_desktop_config.json`
+
+2. Add the LearnLM server:
+
+```json
+{
+  "mcpServers": {
+    "learnlm": {
+      "command": "node",
+      "args": ["/full/path/to/docker/mcp-server/dist/index.js"],
+      "env": {
+        "OPENAI_API_KEY": "sk-your-openai-key"
+      }
+    }
+  }
+}
+```
+
+3. Restart Claude Desktop
+4. You should see "learnlm" in the MCP tools list (hammer icon)
+
+---
+
+### OpenCode
+
+Add to your project's `opencode.json`:
+
+```json
+{
+  "mcp": {
+    "learnlm": {
+      "type": "local",
+      "command": ["node", "/full/path/to/docker/mcp-server/dist/index.js"],
+      "environment": {
+        "OPENAI_API_KEY": "sk-your-openai-key"
+      }
+    }
+  }
+}
+```
+
+Or add globally to `~/.opencode/config.json`.
+
+---
+
+### Windsurf
+
+1. Open Windsurf Settings
+2. Navigate to **AI** > **MCP Servers**
+3. Add a new server with:
+
+```json
+{
+  "learnlm": {
+    "command": "node",
+    "args": ["/full/path/to/docker/mcp-server/dist/index.js"],
+    "env": {
+      "OPENAI_API_KEY": "sk-your-openai-key"
+    }
+  }
+}
+```
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | Yes | OpenAI API key for GPT-4o and DALL-E 3 |
+| `LEARNLM_BACKEND_URL` | No | LearnLM backend API (default: `https://sfu-ai-teacher.email4leit.workers.dev`) |
+| `CLOUDFLARE_ACCOUNT_ID` | No | Cloudflare account ID for AI Search |
+| `CLOUDFLARE_API_TOKEN` | No | Cloudflare API token |
+
+---
+
+## Verifying the Installation
+
+After configuring, test that the MCP server is working:
+
+1. **In VS Code/Cursor**: Open the AI chat and type:
+   ```
+   Use the learnlm tools to search for CMPT 225
+   ```
+
+2. **In Claude Desktop**: Look for the hammer icon showing available tools. Click it to see the 20 LearnLM tools.
+
+3. **Common issues**:
+   - "Command not found": Check the path to `dist/index.js` is correct
+   - "Module not found": Run `npm install && npm run build` in the mcp-server directory
+   - No tools appearing: Restart the application after adding the config
 
 ## Available Tools
 
