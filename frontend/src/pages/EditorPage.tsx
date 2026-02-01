@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { NotesEditor } from "@/components/NotesEditor";
 import { CourseOutlineSidebar, type OutlineSection } from "@/components/course-outline-sidebar";
@@ -137,9 +137,6 @@ export function EditorPage() {
   const location = useLocation();
   const state = location.state as EditorPageState | null;
 
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
-  const [activeSectionId, setActiveSectionId] = useState<string>("1");
-  
   const topic = state?.topic || "Learning Session";
   const sections = state?.sections || defaultSections;
   const transcript = state?.transcript || [];
@@ -148,6 +145,20 @@ export function EditorPage() {
     name: "AI Tutor",
     title: "Your Personal Teacher",
   };
+
+  // Get first section ID (prioritize first child if exists, else first parent)
+  const firstSectionId = useMemo(() => {
+    if (sections.length === 0) return "1";
+    const first = sections[0];
+    // If the first section has children, use the first child's ID
+    if (first.children && first.children.length > 0) {
+      return first.children[0].id;
+    }
+    return first.id;
+  }, [sections]);
+
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+  const [activeSectionId, setActiveSectionId] = useState<string>(firstSectionId);
 
   // Helper function to find section title by id
   const findSectionTitle = (id: string, items: OutlineSection[]): string | undefined => {

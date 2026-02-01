@@ -136,16 +136,32 @@ export default function CustomizePage() {
   };
 
   const handleStart = (outline: OutlineItem[]) => {
-    navigate("/voice", {
+    // Convert outline items to sections format for EditorPage
+    const sections = outline.map((item, index) => ({
+      id: item.id || String(index + 1),
+      number: `${index + 1}.0`,
+      title: item.title,
+      description: item.description || "",
+      duration: item.duration || "15 min",
+      isCompleted: false,
+      children: item.children?.map((child, childIndex) => ({
+        id: child.id || `${index + 1}.${childIndex + 1}`,
+        number: `${index + 1}.${childIndex + 1}`,
+        title: child.title,
+        description: child.description || "",
+        duration: child.duration || "10 min",
+      })),
+    }));
+
+    navigate("/editor", {
       state: {
         topic: displayTopic,
-        courseId,
+        sections,
         character: selectedCharacter || {
           id: "custom",
           name: customCharacterDescription || "Custom Tutor",
         },
         voice: selectedVoice,
-        outline: outline,
         outlineId: generatedOutline?.id,
       },
     });

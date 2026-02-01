@@ -240,54 +240,44 @@ const notesSchema = BlockNoteSchema.create({
 
 // --- Notes editor ---
 interface NotesEditorProps {
-  sectionId?: string;
-  sectionTitle?: string;
+  sectionId: string;
+  sectionTitle: string;
 }
 
-// Store notes content per section in localStorage
-const STORAGE_KEY = 'notes-editor-content';
-
-function getStoredNotes(): Record<string, any[]> {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : {};
-  } catch {
-    return {};
-  }
+// Sanitize section ID for use as localStorage key
+function sanitizeStorageKey(id: string): string {
+  return id.replace(/[^a-zA-Z0-9-_]/g, '_');
 }
 
-function saveNotes(sectionId: string, content: any[]) {
-  try {
-    const stored = getStoredNotes();
-    stored[sectionId] = content;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
-  } catch (e) {
-    console.error('Failed to save notes:', e);
-  }
-}
-
-export function NotesEditor({ sectionId = 'default', sectionTitle }: NotesEditorProps) {
+// Inner component that gets remounted when sectionId changes
+function NotesEditorInner({ sectionId, sectionTitle }: NotesEditorProps) {
   const { resolvedTheme } = useTheme();
-  const [key, setKey] = useState(sectionId);
+  const storageKey = `notes-section-${sanitizeStorageKey(sectionId)}`;
   
-  // Get initial content for this section
+  // Create default content with section title as heading
+  const getDefaultContent = () => [
+    {
+      type: "heading" as const,
+      props: { level: 1 },
+      content: sectionTitle,
+    },
+    {
+      type: "paragraph" as const,
+      content: "",
+    },
+  ];
+
+  // Load initial content from localStorage or use default
   const getInitialContent = () => {
-    const stored = getStoredNotes();
-    if (stored[sectionId] && stored[sectionId].length > 0) {
-      return stored[sectionId];
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return getDefaultContent();
+      }
     }
-    // Default content with section title as heading
-    return [
-      {
-        type: "heading",
-        props: { level: 2 },
-        content: sectionTitle || "Notes",
-      },
-      {
-        type: "paragraph",
-        content: [],
-      },
-    ];
+    return getDefaultContent();
   };
 
   const editor = useCreateBlockNote({
@@ -296,33 +286,18 @@ export function NotesEditor({ sectionId = 'default', sectionTitle }: NotesEditor
     initialContent: getInitialContent(),
   });
 
-  // Re-create editor when section changes
+  // Save to localStorage on change
   useEffect(() => {
-    if (sectionId !== key) {
-      // Save current content before switching
-      const currentContent = editor.document;
-      if (key && currentContent) {
-        saveNotes(key, currentContent);
-      }
-      setKey(sectionId);
-    }
-  }, [sectionId, key, editor]);
-
-  // Save content on changes (debounced via effect)
-  useEffect(() => {
-    const handleChange = () => {
+    const saveContent = () => {
       const content = editor.document;
-      if (content) {
-        saveNotes(sectionId, content);
-      }
+      localStorage.setItem(storageKey, JSON.stringify(content));
     };
 
-    // Subscribe to changes
-    editor.onChange(handleChange);
-  }, [editor, sectionId]);
+    editor.onChange(saveContent);
+  }, [editor, storageKey]);
 
   return (
-    <div className="h-full w-full overflow-auto border border-border bg-background" key={key}>
+    <div className="h-full w-full min-h-[400px] rounded-lg border border-border bg-card">
       <BlockNoteView
         editor={editor}
         theme={resolvedTheme}
@@ -344,4 +319,10 @@ export function NotesEditor({ sectionId = 'default', sectionTitle }: NotesEditor
       </BlockNoteView>
     </div>
   );
+}
+
+// Wrapper component that forces remount when section changes
+export function NotesEditor({ sectionId, sectionTitle }: NotesEditorProps) {
+  // Use both sectionId and sectionTitle in key to ensure remount on either change
+  return <NotesEditorInner key={`${sectionId}-${sectionTitle}`} sectionId={sectionId} sectionTitle={sectionTitle} />;
 }
