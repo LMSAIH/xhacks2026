@@ -15,6 +15,8 @@ import {
   Loader2,
   Circle,
   Sparkles,
+  FileText,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEditorChat, type CommandResult } from "@/hooks/use-editor-chat";
@@ -37,10 +39,14 @@ interface LectureSidebarProps {
   // For voice slash commands
   getNotesContent?: () => string;
   onCommand?: (result: CommandResult) => void;
+  // Callback to insert summary into notes
+  onAddNotesToEditor?: (summary: string) => void;
+  // Callback when session is ready (provides sessionId for RAG context)
+  onSessionReady?: (sessionId: string) => void;
 }
 
 const KEYBINDS = [
-  { key: "Space", description: "Hold to talk", icon: Mic },
+  { key: "Space", description: "Hold to talk (interrupts AI)", icon: Mic },
   { key: "Esc", description: "Stop audio", icon: MicOff },
   { key: "Enter", description: "Send message", icon: Send },
 ];
@@ -53,6 +59,8 @@ export function LectureSidebar({
   sectionTitle = "Introduction",
   getNotesContent,
   onCommand,
+  onAddNotesToEditor,
+  onSessionReady,
 }: LectureSidebarProps) {
   const [activeTab, setActiveTab] = useState<"chat" | "commands">("chat");
   const [textInput, setTextInput] = useState("");
@@ -65,6 +73,9 @@ export function LectureSidebar({
     messages,
     error,
     liveTranscript,
+    showNotesPrompt,
+    notesSummary,
+    sessionId,
     init,
     sendMessage,
     startRecording,
@@ -72,6 +83,7 @@ export function LectureSidebar({
     stopAudio,
     clearHistory,
     updateSection,
+    dismissNotesPrompt,
   } = useEditorChat({
     onCommand,
     getNotesContent,
@@ -80,6 +92,13 @@ export function LectureSidebar({
   const professorName = character?.name || "AI Tutor";
   const professorTitle = character?.title || "Your Teacher";
   const professorImage = character?.image;
+
+  // Notify parent when session is ready
+  useEffect(() => {
+    if (sessionId && onSessionReady) {
+      onSessionReady(sessionId);
+    }
+  }, [sessionId, onSessionReady]);
 
   // Initialize on mount
   useEffect(() => {
@@ -107,21 +126,29 @@ export function LectureSidebar({
     }
   }, [messages]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts - spacebar to talk OR interrupt AI
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
 
-      if (e.code === "Space" && !e.repeat && voiceState === 'idle' && isReady) {
+      if (e.code === "Space" && !e.repeat && isReady) {
         e.preventDefault();
-        startRecording();
+        
+        // If AI is speaking or processing, interrupt first then start recording
+        if (voiceState === 'playing' || voiceState === 'processing') {
+          stopAudio();
+          // Small delay to ensure audio stops before starting recording
+          setTimeout(() => startRecording(), 50);
+        } else if (voiceState === 'idle') {
+          startRecording();
+        }
       }
 
       if (e.code === "Escape") {
         e.preventDefault();
-        if (voiceState === 'playing') {
+        if (voiceState === 'playing' || voiceState === 'processing') {
           stopAudio();
         }
       }
@@ -329,6 +356,54 @@ export function LectureSidebar({
                       <div className="flex items-center gap-2">
                         <Mic className="h-4 w-4 text-primary animate-pulse" />
                         <span className="text-xs text-primary">Listening...</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Notes prompt after extended conversation */}
+                  {showNotesPrompt && notesSummary && (
+                    <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/30 rounded-lg p-3 space-y-2 animate-in slide-in-from-bottom-2 duration-300">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-primary" />
+                          <span className="text-xs font-medium text-primary">Add to your notes?</span>
+                        </div>
+                        <button
+                          onClick={dismissNotesPrompt}
+                          className="p-0.5 hover:bg-primary/20 rounded transition-colors"
+                        >
+                          <X className="h-3 w-3 text-muted-foreground" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        We've discussed several topics. Here's a summary you can add to your notes:
+                      </p>
+                      <div className="bg-card/50 rounded p-2 text-xs text-foreground/80 whitespace-pre-line max-h-32 overflow-y-auto">
+                        {notesSummary}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="flex-1 h-7 text-xs"
+                          onClick={() => {
+                            if (onAddNotesToEditor) {
+                              onAddNotesToEditor(notesSummary);
+                            }
+                            dismissNotesPrompt();
+                          }}
+                        >
+                          <FileText className="h-3 w-3 mr-1" />
+                          Add to Notes
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={dismissNotesPrompt}
+                        >
+                          Dismiss
+                        </Button>
                       </div>
                     </div>
                   )}
