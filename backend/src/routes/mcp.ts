@@ -13,6 +13,8 @@ import {
   critiqueNotes,
   critiqueNotesWithDiff,
   getFormulas,
+  suggestNotes,
+  quickCritique,
 } from '../services/ai-tools';
 
 const mcpRoutes = new Hono<{ Bindings: Env }>();
@@ -172,6 +174,55 @@ mcpRoutes.post('/critique-diff', async (c) => {
     return c.json(result);
   } catch (e) {
     console.error('Critique-diff error:', e);
+    return c.json({ error: String(e) }, 500);
+  }
+});
+
+// Suggest notes content based on current notes
+mcpRoutes.post('/suggest', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { notes, courseCode, sessionId } = body as {
+      notes: string;
+      courseCode?: string;
+      sessionId?: string;
+    };
+
+    const response = await suggestNotes(c.env, notes || '', {
+      courseCode,
+      sessionId,
+    });
+    
+    return c.json({ response });
+  } catch (e) {
+    console.error('Suggest error:', e);
+    return c.json({ error: String(e) }, 500);
+  }
+});
+
+// Quick background critique for periodic checking
+mcpRoutes.post('/quick-critique', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { notes, recentContent, courseCode, sessionId } = body as {
+      notes: string;         // Full notes context
+      recentContent: string; // Most recent 2-3 paragraphs
+      courseCode?: string;
+      sessionId?: string;
+    };
+
+    if (!recentContent) {
+      return c.json({ error: 'recentContent required' }, 400);
+    }
+
+    const response = await quickCritique(c.env, notes || '', recentContent, {
+      courseCode,
+      sessionId,
+    });
+    
+    return c.json({ response });
+  } catch (e) {
+    console.error('Quick critique error:', e);
     return c.json({ error: String(e) }, 500);
   }
 });
