@@ -4,6 +4,7 @@ import { HomePage } from '@/pages/HomePage';
 import { SelectTopicPage } from '@/pages/SelectTopicPage';
 import { BrowseCoursesPage } from '@/pages/BrowseCoursesPage';
 import { CustomTopicPage } from '@/pages/CustomTopicPage';
+import { NotesEditorPage } from '@/pages/NotesEditorPage';
 import CustomizePage from '@/pages/CustomizePage';
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
         <Route path="/custom-topic" element={<CustomTopicPage />} />
         <Route path="/customize" element={<CustomizePage />} />
         <Route path="/voice" element={<VoiceAgent />} />
+        <Route path="/notes" element={<NotesEditorPage />} />
       </Routes>
     </Router>
   );
