@@ -6,7 +6,7 @@ import { TranscriptDisplay } from '@/components/transcript-display';
 import { ControlButtons } from '@/components/control-buttons';
 import { StatusIndicator } from '@/components/status-indicator';
 import { Card } from '@/components/ui/card';
-import { Settings, Sparkles, Loader2, ArrowLeft } from 'lucide-react';
+import { Settings, Sparkles, Loader2, ArrowLeft, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -31,11 +31,21 @@ export function VoiceAgent() {
     prerequisites?: string;
     voice?: { id: string; name: string };
     character?: { id: string; name: string };
+    outline?: Array<{
+      id: string;
+      number: string;
+      title: string;
+      description?: string;
+      duration?: string;
+      children?: any[];
+    }>;
+    outlineId?: string;
   } | null;
   const topic = topicState?.topic || 'General Learning';
   const topicContext = topicState?.context || '';
   const selectedVoice = topicState?.voice;
   const selectedCharacter = topicState?.character;
+  const outline = topicState?.outline;
   
   // Create a simple course code from the topic
   const courseCode = topic.split(':')[0].replace(/\s+/g, '').toUpperCase().slice(0, 10) || 'GENERAL';
@@ -114,6 +124,16 @@ export function VoiceAgent() {
     interrupt();
   }, [interrupt]);
 
+  const handleGoToEditor = useCallback(() => {
+    navigate('/editor', {
+      state: {
+        topic,
+        transcript: messages,
+        sections: outline,
+      },
+    });
+  }, [navigate, topic, messages, outline]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 flex flex-col">
       {/* Header */}
@@ -144,6 +164,17 @@ export function VoiceAgent() {
         
         {/* Status & Settings */}
         <div className="flex items-center gap-4">
+          {messages.length > 0 && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleGoToEditor}
+              className="flex items-center gap-2 bg-primary/90 hover:bg-primary"
+            >
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Take Notes</span>
+            </Button>
+          )}
           <StatusIndicator
             isConnected={isConnected}
             isListening={isListening}
