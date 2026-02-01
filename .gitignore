@@ -2,3 +2,8 @@ coverage/
 .wrangler/
 backend/.dev
 backend/.env.example
+docker/mcp-server/node_modules
+docker/mcp-server/dist
+docker/mcp-server/.env
+docker/mcp-server/data
+rag-content/
