@@ -15,7 +15,7 @@ export function Navbar() {
           <img 
             src="/logo.png" 
             alt="LearnLM" 
-            className="h-6 w-auto dark:invert"
+            className="h-8 w-auto dark:invert"
           />
           <span className="text-xl font-bold tracking-tight">LearnLM</span>
         </button>
