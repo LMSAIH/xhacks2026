@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env } from './types';
+import { updateCoursesFromAPI, getCourses, getCourseByCode, getCourse } from './services/courses';
 import { VOICES } from './voices';
 
 // Export Durable Object (use v2 for optimized voice)
@@ -48,15 +49,36 @@ app.get('/api/config', (c) => {
   });
 });
 
-// Courses API - TODO: Implement
-app.get('/api/courses', async (c) => {
-  // Your backend engineer implements this
-  return c.json({ courses: [] });
+// Update courses from SFU API - filters by term, defaults to "Fall 2025"
+app.get('/api/courses/update/', async (c) => {
+  const term = c.req.query('term') || 'Fall 2025';
+  const result = await updateCoursesFromAPI(c.env, term);
+  return c.json(result);
 });
 
-app.get('/api/courses/:code', async (c) => {
-  const code = c.req.param('code');
-  return c.json({ course: null, code });
+// Courses API - Get all courses with optional filters
+app.get('/api/courses', async (c) => {
+  const name = c.req.query('name');
+  
+  const courses = await getCourses(c.env, {
+    name: name || undefined,
+  });
+  
+  return c.json({ courses });
+});
+
+// Get specific course by name
+app.get('/api/courses/:name', async (c) => {
+  const name = c.req.param('name');
+  const course = await getCourseByCode(c.env, name);
+  return c.json({ course });
+});
+
+// Get specific course by id
+app.get('/api/courses/id/:id', async (c) => {
+  const id = c.req.param('id');
+  const course = await getCourse(c.env, { id });
+  return c.json({ course });
 });
 
 // Progress API - TODO: Implement
