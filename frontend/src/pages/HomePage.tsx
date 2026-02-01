@@ -33,61 +33,87 @@ export function HomePage() {
   return (
     <PageLayout>
       <div className="flex-1 flex flex-col">
-        {/* Hero */}
-        <section className="flex-1 flex flex-col items-center justify-center px-6 py-16">
-          <div className="max-w-3xl mx-auto text-center">
-            {/* Main headline */}
+        {/* Hero - Anthropic style */}
+        <section className="flex-1 flex items-center justify-center px-6 py-16 relative overflow-hidden min-h-[80vh]">
+          {/* Floating video element - Anthropic style with blend mode */}
+          <div className="absolute right-[5%] top-1/2 -translate-y-1/2 w-[400px] h-[500px] hidden lg:block">
+            <div className="relative w-full h-full">
+              {/* Glow effect behind video */}
+              <div className="absolute inset-0 bg-gradient-radial from-foreground/5 to-transparent blur-3xl scale-150" />
+              
+              {/* Video container with blend mode for theme adaptation */}
+              <div className="relative w-full h-full rounded-3xl overflow-hidden opacity-60 mix-blend-luminosity dark:mix-blend-screen">
+                <video
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover grayscale"
+                >
+                  <source src="/einstein_video.mp4" type="video/mp4" />
+                </video>
+              </div>
+              
+              {/* Soft edge fade */}
+              <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-background pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/50 pointer-events-none" />
+            </div>
+          </div>
+          
+          <div className="max-w-4xl mx-auto relative z-10 lg:mr-auto lg:ml-[10%]">
+            {/* Main headline - Anthropic style large text */}
             <BlurFade delay={0.1} inView>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-medium mb-8 leading-[1.1] tracking-tight">
                 Learn from History's
                 <br />
-                Greatest Minds
+                <span className="text-muted-foreground">Greatest Minds</span>
               </h1>
             </BlurFade>
 
             {/* Subtitle */}
             <BlurFade delay={0.2} inView>
-              <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-xl mx-auto">
+              <p className="text-lg md:text-xl text-muted-foreground mb-12 max-w-lg leading-relaxed">
                 Have natural voice conversations with AI tutors modeled after
                 legendary thinkers. Ask questions, explore ideas, learn anything.
               </p>
             </BlurFade>
 
-            {/* CTA Buttons */}
+            {/* CTA Buttons - Clean, minimal */}
             <BlurFade delay={0.3} inView>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+              <div className="flex flex-col sm:flex-row items-start gap-4">
                 <button
                   onClick={() => navigate("/select-topic")}
-                  className="px-8 py-4 bg-foreground text-background font-semibold text-lg hover:bg-foreground/90 transition-colors w-full sm:w-auto"
+                  className="group px-6 py-3 bg-foreground text-background font-medium hover:bg-foreground/90 transition-all inline-flex items-center gap-2"
                 >
-                  Start Learning →
+                  Start Learning 
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </button>
                 <button
                   onClick={() => navigate("/voice")}
-                  className="px-8 py-4 border-2 border-border font-medium hover:border-foreground transition-colors w-full sm:w-auto"
+                  className="px-6 py-3 text-muted-foreground hover:text-foreground font-medium transition-colors inline-flex items-center gap-2"
                 >
-                  Try a Demo First
+                  Try a Demo
                 </button>
               </div>
             </BlurFade>
 
-            {/* Social proof / trust */}
+            {/* Subtle trust line */}
             <BlurFade delay={0.4} inView>
-              <p className="text-sm text-muted-foreground">
-                Free to try • No account required • Works on any device
+              <p className="text-sm text-muted-foreground/60 mt-16">
+                Free to try • No account required
               </p>
             </BlurFade>
           </div>
         </section>
 
         {/* Tutors Preview - Marquee */}
-        <section className="py-12 border-y-2 border-foreground bg-card overflow-hidden">
+        <section className="py-16 border-t border-border overflow-hidden">
           <div className="max-w-5xl mx-auto px-6">
             <BlurFade delay={0.1} inView>
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-semibold mb-2">Meet Your Tutors</h2>
+              <div className="mb-10">
+                <h2 className="text-3xl font-medium mb-3">Meet Your Tutors</h2>
                 <p className="text-muted-foreground">
-                  Choose from brilliant minds across history, each with their own teaching style
+                  Choose from brilliant minds across history
                 </p>
               </div>
             </BlurFade>
