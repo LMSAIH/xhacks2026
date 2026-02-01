@@ -14,20 +14,25 @@ import { filterSuggestionItems } from '@blocknote/core/extensions';
 import katex from 'katex';
 // @ts-expect-error no types for react-katex
 import { BlockMath, InlineMath } from 'react-katex';
-import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle, createContext, useContext } from 'react';
 import { ReactSketchCanvas, type ReactSketchCanvasRef } from 'react-sketch-canvas';
 import { getNotesSlashMenuItems } from '@/components/note-editor-menu';
 import * as Button from '@/components/ui/button';
 import * as Card from '@/components/ui/card';
 import { Button as ShadButton } from '@/components/ui/button';
 import { useTheme } from '@/components/ui/theme-provider';
-import { Loader2, Sparkles, Copy, Check, Plus, X, CheckCircle, AlertCircle, PlusCircle, MinusCircle, MessageSquare } from 'lucide-react';
+import { Loader2, Sparkles, Copy, Check, Plus, X, CheckCircle, AlertCircle, PlusCircle, MinusCircle, MessageSquare, Lightbulb } from 'lucide-react';
+import { useBackgroundCritique } from '@/hooks/use-background-critique';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8787';
+
+// Context to provide sessionId to AI blocks for RAG context
+const SessionContext = createContext<string | null>(null);
+const useSessionId = () => useContext(SessionContext);
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -255,6 +260,7 @@ function AIResponseBlockContent({ block, editor }: AIResponseBlockContentProps) 
   const [copied, setCopied] = useState(false);
   const [added, setAdded] = useState(false);
   const hasRun = useRef(false);
+  const sessionId = useSessionId(); // Get sessionId from context for RAG
   
   const { prompt, response, toolType, isLoading } = block.props;
   
@@ -284,9 +290,18 @@ function AIResponseBlockContent({ block, editor }: AIResponseBlockContentProps) 
             endpoint = '/api/mcp/formulas';
             payload = { topic: prompt };
             break;
+          case 'suggest':
+            endpoint = '/api/mcp/suggest';
+            payload = { notes: prompt };
+            break;
           default:
             endpoint = '/api/mcp/ask';
             payload = { question: prompt };
+        }
+        
+        // Add sessionId for RAG context if available
+        if (sessionId) {
+          payload.sessionId = sessionId;
         }
         
         const res = await fetch(`${BACKEND_URL}${endpoint}`, {
@@ -314,7 +329,7 @@ function AIResponseBlockContent({ block, editor }: AIResponseBlockContentProps) 
     };
     
     runAI();
-  }, [block.id, editor, prompt, response, toolType]);
+  }, [block.id, editor, prompt, response, toolType, sessionId]);
   
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(response);
@@ -334,8 +349,8 @@ function AIResponseBlockContent({ block, editor }: AIResponseBlockContentProps) 
         // Insert the parsed blocks after this AI response block
         editor.insertBlocks(blocks, block.id, 'after');
         
-        // For critique and explain, remove the AI block after adding to notes
-        if (toolType === 'critique' || toolType === 'explain') {
+        // For critique, explain, and suggest, remove the AI block after adding to notes
+        if (toolType === 'critique' || toolType === 'explain' || toolType === 'suggest') {
           // Small delay to ensure blocks are inserted first
           setTimeout(() => {
             editor.removeBlocks([block.id]);
@@ -356,7 +371,7 @@ function AIResponseBlockContent({ block, editor }: AIResponseBlockContentProps) 
       
       if (fallbackBlocks.length > 0) {
         editor.insertBlocks(fallbackBlocks, block.id, 'after');
-        if (toolType === 'critique' || toolType === 'explain') {
+        if (toolType === 'critique' || toolType === 'explain' || toolType === 'suggest') {
           setTimeout(() => {
             editor.removeBlocks([block.id]);
           }, 100);
@@ -376,6 +391,8 @@ function AIResponseBlockContent({ block, editor }: AIResponseBlockContentProps) 
       ? 'Preparing explanation...'
       : toolType === 'formulas'
       ? 'Finding formulas...'
+      : toolType === 'suggest'
+      ? 'Generating suggestions...'
       : 'Thinking...';
     
     return (
@@ -402,12 +419,13 @@ function AIResponseBlockContent({ block, editor }: AIResponseBlockContentProps) 
       case 'explain': return 'Explanation';
       case 'critique': return 'Notes Review';
       case 'formulas': return 'Formulas';
+      case 'suggest': return 'Suggested Notes';
       default: return 'Answer';
     }
   };
   
-  // For critique, don't show the prompt (it's the full notes content)
-  const showPrompt = toolType !== 'critique';
+  // For critique and suggest, don't show the prompt (it's the full notes content)
+  const showPrompt = toolType !== 'critique' && toolType !== 'suggest';
   
   // Button label for add to notes
   const addButtonTitle = toolType === 'critique' 
@@ -610,7 +628,7 @@ type AICritiqueBlockContentProps = {
     } 
   };
   editor: { 
-    updateBlock: (id: string, partial: { props: Partial<AICritiqueBlockContentProps['block']['props']> }) => void;
+    updateBlock: (id: string, partial: { props?: Partial<AICritiqueBlockContentProps['block']['props']>; content?: unknown }) => void;
     removeBlocks: (ids: string[]) => void;
     insertBlocks: (blocks: Array<{ type: string; props?: Record<string, unknown>; content?: unknown }>, referenceBlock: string, placement: 'before' | 'after') => void;
     tryParseMarkdownToBlocks: (markdown: string) => Promise<Array<{ type: string; props?: Record<string, unknown>; content?: unknown }>>;
@@ -804,9 +822,127 @@ function AICritiqueBlockContent({ block, editor }: AICritiqueBlockContentProps) 
       }
     }
     
-    // For modifications and deletions, we'd need to find and replace text
-    // This is complex because we need to find the original text in the blocks
-    // For now, we'll just mark it as accepted and the user can manually apply
+    // For modifications, find the original text and replace with suggested
+    if (suggestion.type === 'modification' && suggestion.original && suggestion.suggested) {
+      try {
+        // Search through all blocks to find the original text
+        const normalizedOriginal = suggestion.original.trim().toLowerCase();
+        
+        for (const block of editor.document) {
+          // Skip AI-generated blocks
+          if (['aiCritique', 'aiResponse', 'aiInput'].includes(block.type)) continue;
+          
+          // Get the block's text content
+          const content = block.content;
+          if (!content || !Array.isArray(content)) continue;
+          
+          // Search through inline content
+          for (let i = 0; i < content.length; i++) {
+            const item = content[i];
+            if (typeof item === 'object' && 'text' in item) {
+              const text = (item as { text: string }).text;
+              const normalizedText = text.toLowerCase();
+              
+              if (normalizedText.includes(normalizedOriginal)) {
+                // Found the text, replace it
+                const newText = text.replace(
+                  new RegExp(suggestion.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+                  suggestion.suggested
+                );
+                
+                // Update the block content
+                const newContent = [...content];
+                newContent[i] = { ...item, text: newText };
+                
+                editor.updateBlock(block.id, {
+                  content: newContent,
+                });
+                
+                console.log(`Applied modification: "${suggestion.original}" -> "${suggestion.suggested}"`);
+                return; // Applied successfully
+              }
+            }
+          }
+        }
+        
+        console.log('Could not find original text for modification:', suggestion.original);
+      } catch (e) {
+        console.error('Failed to apply modification:', e);
+      }
+    }
+    
+    // For deletions, find and remove the original text
+    if (suggestion.type === 'deletion' && suggestion.original) {
+      try {
+        const normalizedOriginal = suggestion.original.trim().toLowerCase();
+        
+        for (const block of editor.document) {
+          // Skip AI-generated blocks
+          if (['aiCritique', 'aiResponse', 'aiInput'].includes(block.type)) continue;
+          
+          const content = block.content;
+          if (!content || !Array.isArray(content)) continue;
+          
+          // Check if the entire block matches (for deleting whole paragraphs)
+          const blockText = content
+            .filter((item): item is { text: string } => typeof item === 'object' && 'text' in item)
+            .map(item => item.text)
+            .join('')
+            .trim()
+            .toLowerCase();
+          
+          if (blockText === normalizedOriginal || blockText.includes(normalizedOriginal)) {
+            // If the whole block matches, remove it
+            if (blockText === normalizedOriginal) {
+              editor.removeBlocks([block.id]);
+              console.log(`Deleted block containing: "${suggestion.original}"`);
+              return;
+            }
+            
+            // Otherwise, remove just the matching text
+            for (let i = 0; i < content.length; i++) {
+              const item = content[i];
+              if (typeof item === 'object' && 'text' in item) {
+                const text = (item as { text: string }).text;
+                if (text.toLowerCase().includes(normalizedOriginal)) {
+                  const newText = text.replace(
+                    new RegExp(suggestion.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+                    ''
+                  ).trim();
+                  
+                  const newContent = [...content];
+                  if (newText) {
+                    newContent[i] = { ...item, text: newText };
+                  } else {
+                    newContent.splice(i, 1);
+                  }
+                  
+                  if (newContent.length === 0) {
+                    editor.removeBlocks([block.id]);
+                  } else {
+                    editor.updateBlock(block.id, {
+                      content: newContent,
+                    });
+                  }
+                  
+                  console.log(`Deleted text: "${suggestion.original}"`);
+                  return;
+                }
+              }
+            }
+          }
+        }
+        
+        console.log('Could not find original text for deletion:', suggestion.original);
+      } catch (e) {
+        console.error('Failed to apply deletion:', e);
+      }
+    }
+    
+    // For comments, no action needed - just mark as acknowledged
+    if (suggestion.type === 'comment') {
+      console.log('Comment acknowledged:', suggestion.reason);
+    }
     
   }, [editor]);
   
@@ -969,6 +1105,7 @@ const notesSchema = BlockNoteSchema.create({
 interface NotesEditorProps {
   sectionId: string;
   sectionTitle: string;
+  sessionId?: string | null; // Optional session ID for RAG context in MCP calls
 }
 
 // Ref handle exposed to parent components
@@ -976,6 +1113,7 @@ export interface NotesEditorHandle {
   getContent: () => string;
   insertCritiqueBlock: (critiqueData: unknown) => void;
   insertResponseBlock: (toolType: string, prompt: string, response: string) => void;
+  insertSummary: (summary: string) => void;
 }
 
 // Sanitize section ID for use as localStorage key
@@ -1017,9 +1155,22 @@ function extractEditorContent(document: Array<{ type: string; content?: unknown;
 
 // Inner component that gets remounted when sectionId changes
 const NotesEditorInner = forwardRef<NotesEditorHandle, NotesEditorProps>(
-  function NotesEditorInner({ sectionId, sectionTitle }, ref) {
+  function NotesEditorInner({ sectionId, sectionTitle, sessionId }, ref) {
   const { resolvedTheme } = useTheme();
   const storageKey = `notes-section-${sanitizeStorageKey(sectionId)}`;
+  
+  // Background critique hook for subtle AI feedback
+  const {
+    feedback: critiqueFeedback,
+    isVisible: showCritiqueFeedback,
+    isLoading: critiqueLoading,
+    dismissFeedback: dismissCritique,
+    onContentChange: onCritiqueContentChange,
+  } = useBackgroundCritique({
+    enabled: true,
+    debounceDelay: 30000, // 30 seconds
+    minContentLength: 100,
+  });
   
   // Create default content with section title as heading
   const getDefaultContent = () => [
@@ -1095,20 +1246,44 @@ const NotesEditorInner = forwardRef<NotesEditorHandle, NotesEditorProps>(
         );
       }
     },
+    insertSummary: (summary: string) => {
+      // Insert a summary from voice chat as an AI response block
+      const lastBlock = editor.document[editor.document.length - 1];
+      if (lastBlock) {
+        editor.insertBlocks(
+          [{
+            type: 'aiResponse' as const,
+            props: {
+              prompt: 'Voice Chat Summary',
+              response: summary,
+              toolType: 'summary',
+              isLoading: false,
+            },
+          }],
+          lastBlock.id,
+          'after'
+        );
+      }
+    },
   }), [editor]);
 
-  // Save to localStorage on change
+  // Save to localStorage on change and trigger background critique
   useEffect(() => {
     const saveContent = () => {
       const content = editor.document;
       localStorage.setItem(storageKey, JSON.stringify(content));
+      
+      // Also trigger background critique with extracted text
+      const textContent = extractEditorContent(content as Array<{ type: string; content?: unknown; props?: Record<string, unknown> }>);
+      onCritiqueContentChange(textContent);
     };
 
     editor.onChange(saveContent);
-  }, [editor, storageKey]);
+  }, [editor, storageKey, onCritiqueContentChange]);
 
   return (
-    <div className="h-full w-full min-h-[400px] rounded-lg border border-border bg-card">
+    <SessionContext.Provider value={sessionId || null}>
+    <div className="relative h-full w-full min-h-[400px] rounded-lg border border-border bg-card">
       <BlockNoteView
         editor={editor}
         theme={resolvedTheme}
@@ -1128,13 +1303,46 @@ const NotesEditorInner = forwardRef<NotesEditorHandle, NotesEditorProps>(
           }
         />
       </BlockNoteView>
+      
+      {/* Subtle background critique feedback */}
+      {(showCritiqueFeedback || critiqueLoading) && (
+        <div className="absolute bottom-4 right-4 max-w-sm animate-in slide-in-from-bottom-2 fade-in duration-300">
+          <div className="bg-card/95 backdrop-blur-sm border border-primary/20 rounded-lg shadow-lg p-3">
+            {critiqueLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span>Reviewing your notes...</span>
+              </div>
+            ) : critiqueFeedback && (
+              <>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-1.5">
+                    <Lightbulb className="h-4 w-4 text-amber-500" />
+                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Quick tip</span>
+                  </div>
+                  <button 
+                    onClick={dismissCritique}
+                    className="p-0.5 hover:bg-muted rounded transition-colors"
+                  >
+                    <X className="h-3 w-3 text-muted-foreground" />
+                  </button>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {critiqueFeedback}
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
+    </SessionContext.Provider>
   );
 });
 
 // Wrapper component that forces remount when section changes
 export const NotesEditor = forwardRef<NotesEditorHandle, NotesEditorProps>(
-  function NotesEditor({ sectionId, sectionTitle }, ref) {
+  function NotesEditor({ sectionId, sectionTitle, sessionId }, ref) {
   // Use both sectionId and sectionTitle in key to ensure remount on either change
-  return <NotesEditorInner key={`${sectionId}-${sectionTitle}`} ref={ref} sectionId={sectionId} sectionTitle={sectionTitle} />;
+  return <NotesEditorInner key={`${sectionId}-${sectionTitle}`} ref={ref} sectionId={sectionId} sectionTitle={sectionTitle} sessionId={sessionId} />;
 });

@@ -33,6 +33,10 @@ interface UseEditorChatOptions {
   onCommand?: (result: CommandResult) => void;
   // Function to get current notes content for commands like /critique
   getNotesContent?: () => string;
+  // Callback when conversation reaches a certain length and user should add notes
+  onSuggestAddNotes?: (summary: string) => void;
+  // Number of exchanges before suggesting to add notes (default: 5)
+  suggestNotesAfterExchanges?: number;
 }
 
 interface UseEditorChatReturn {
@@ -41,6 +45,10 @@ interface UseEditorChatReturn {
   messages: ChatMessage[];
   error: string | null;
   liveTranscript: string;
+  exchangeCount: number;
+  showNotesPrompt: boolean;
+  notesSummary: string | null;
+  sessionId: string | null;
   
   init: (config: EditorChatConfig) => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
@@ -50,6 +58,8 @@ interface UseEditorChatReturn {
   clearHistory: () => Promise<void>;
   updateSection: (sectionTitle: string) => Promise<void>;
   updateNotes: (notes: string) => Promise<void>;
+  dismissNotesPrompt: () => void;
+  summarizeConversation: () => Promise<string | null>;
 }
 
 // Browser Speech Recognition types
@@ -96,13 +106,21 @@ declare global {
 }
 
 export function useEditorChat(options: UseEditorChatOptions = {}): UseEditorChatReturn {
-  const { onCommand, getNotesContent } = options;
+  const { 
+    onCommand, 
+    getNotesContent, 
+    onSuggestAddNotes,
+    suggestNotesAfterExchanges = 5,
+  } = options;
   
   const [isReady, setIsReady] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [liveTranscript, setLiveTranscript] = useState('');
+  const [exchangeCount, setExchangeCount] = useState(0);
+  const [showNotesPrompt, setShowNotesPrompt] = useState(false);
+  const [notesSummary, setNotesSummary] = useState<string | null>(null);
   
   const sessionIdRef = useRef<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -111,12 +129,68 @@ export function useEditorChat(options: UseEditorChatOptions = {}): UseEditorChat
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const onCommandRef = useRef(onCommand);
   const getNotesContentRef = useRef(getNotesContent);
+  const onSuggestAddNotesRef = useRef(onSuggestAddNotes);
+  const lastPromptedAtRef = useRef(0); // Track when we last prompted
   
   // Keep refs updated
   useEffect(() => {
     onCommandRef.current = onCommand;
     getNotesContentRef.current = getNotesContent;
-  }, [onCommand, getNotesContent]);
+    onSuggestAddNotesRef.current = onSuggestAddNotes;
+  }, [onCommand, getNotesContent, onSuggestAddNotes]);
+
+  // Check if we should prompt user to add notes
+  useEffect(() => {
+    // Only prompt if we've had enough exchanges and haven't prompted recently
+    if (
+      exchangeCount > 0 && 
+      exchangeCount % suggestNotesAfterExchanges === 0 &&
+      exchangeCount !== lastPromptedAtRef.current
+    ) {
+      lastPromptedAtRef.current = exchangeCount;
+      
+      // Generate a summary and show prompt
+      summarizeConversation().then((summary) => {
+        if (summary) {
+          setNotesSummary(summary);
+          setShowNotesPrompt(true);
+          
+          // Also call the callback if provided
+          if (onSuggestAddNotesRef.current) {
+            onSuggestAddNotesRef.current(summary);
+          }
+        }
+      });
+    }
+  }, [exchangeCount, suggestNotesAfterExchanges]);
+
+  // Summarize conversation for notes
+  const summarizeConversation = useCallback(async (): Promise<string | null> => {
+    if (!sessionIdRef.current || messages.length < 2) return null;
+    
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/editor-chat/session/${sessionIdRef.current}/summarize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (!res.ok) {
+        console.error('Failed to summarize conversation');
+        return null;
+      }
+      
+      const data = await res.json();
+      return data.summary || null;
+    } catch (e) {
+      console.error('Summarize error:', e);
+      return null;
+    }
+  }, [messages.length]);
+
+  // Dismiss the notes prompt
+  const dismissNotesPrompt = useCallback(() => {
+    setShowNotesPrompt(false);
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -212,6 +286,9 @@ export function useEditorChat(options: UseEditorChatOptions = {}): UseEditorChat
       };
       
       setMessages(prev => [...prev, aiMessage]);
+      
+      // Increment exchange count (one complete user->AI exchange)
+      setExchangeCount(prev => prev + 1);
       
       // If this was a command, trigger the callback
       if (data.isCommand && onCommandRef.current) {
@@ -365,6 +442,9 @@ export function useEditorChat(options: UseEditorChatOptions = {}): UseEditorChat
           
           setMessages(prev => [...prev, userMessage, aiMessage]);
           
+          // Increment exchange count (one complete user->AI exchange)
+          setExchangeCount(prev => prev + 1);
+          
           // If this was a command, trigger the callback
           if (data.isCommand && onCommandRef.current) {
             onCommandRef.current({
@@ -470,6 +550,10 @@ export function useEditorChat(options: UseEditorChatOptions = {}): UseEditorChat
     messages,
     error,
     liveTranscript,
+    exchangeCount,
+    showNotesPrompt,
+    notesSummary,
+    sessionId: sessionIdRef.current,
     init,
     sendMessage,
     startRecording,
@@ -478,5 +562,7 @@ export function useEditorChat(options: UseEditorChatOptions = {}): UseEditorChat
     clearHistory,
     updateSection,
     updateNotes,
+    dismissNotesPrompt,
+    summarizeConversation,
   };
 }

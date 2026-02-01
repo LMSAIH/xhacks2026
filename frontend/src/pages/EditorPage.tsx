@@ -162,6 +162,7 @@ export function EditorPage() {
 
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [activeSectionId, setActiveSectionId] = useState<string>(firstSectionId);
+  const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   
   // Ref to access the NotesEditor methods
   const editorRef = useRef<NotesEditorHandle>(null);
@@ -201,14 +202,33 @@ export function EditorPage() {
       case 'explain':
       case 'ask':
       case 'formulas':
-        // Insert response block
+      case 'suggest':
+        // Insert response block - voice commands should add to notes
         if (result.data && typeof result.data === 'object') {
-          const data = result.data as { question?: string; concept?: string; topic?: string; answer?: string; explanation?: string; formulas?: string };
-          const prompt = data.question || data.concept || data.topic || '';
-          const response = data.answer || data.explanation || data.formulas || result.response;
+          const data = result.data as { 
+            question?: string; 
+            concept?: string; 
+            topic?: string; 
+            answer?: string; 
+            explanation?: string; 
+            formulas?: string;
+            suggestions?: string;
+          };
+          const prompt = data.question || data.concept || data.topic || result.commandType;
+          const response = data.answer || data.explanation || data.formulas || data.suggestions || result.response;
           editorRef.current.insertResponseBlock(result.commandType, prompt, response);
+        } else if (result.response) {
+          // Fallback: if no data object, just use the response directly
+          editorRef.current.insertResponseBlock(result.commandType, result.commandType, result.response);
         }
         break;
+    }
+  }, []);
+
+  // Callback to add summary from voice chat to notes
+  const handleAddNotesToEditor = useCallback((summary: string) => {
+    if (editorRef.current) {
+      editorRef.current.insertSummary(summary);
     }
   }, []);
 
@@ -274,6 +294,7 @@ export function EditorPage() {
                 ref={editorRef}
                 sectionId={activeSectionId} 
                 sectionTitle={activeSectionTitle}
+                sessionId={chatSessionId}
               />
             </div>
           </div>
@@ -289,6 +310,8 @@ export function EditorPage() {
             sectionTitle={activeSectionTitle}
             getNotesContent={getNotesContent}
             onCommand={handleCommand}
+            onSessionReady={setChatSessionId}
+            onAddNotesToEditor={handleAddNotesToEditor}
           />
         </div>
       </div>
