@@ -6,11 +6,18 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	// Custom domain route for API
+	"routes": [
+		{
+			"pattern": "api.learn-lm.com/*",
+			"zone_name": "learn-lm.com"
+		}
+	],
 	// Environment variables
 	"vars": {
-		"ENVIRONMENT": "development",
+		"ENVIRONMENT": "production",
 		"SFU_API_BASE_URL": "https://api.sfucourses.com",
-		"AI_GATEWAY_ACCOUNT_ID": "",
+		"AI_GATEWAY_ACCOUNT_ID": "8591cc47c530918025357f1eeab73ce6",
 		"AI_GATEWAY_NAME": "sfu-ai-teacher"
 	},
 	// Workers AI binding
