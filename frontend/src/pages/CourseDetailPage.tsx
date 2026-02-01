@@ -13,9 +13,9 @@ export function CourseDetailPage() {
   }
 
   const handleStartLearning = () => {
-    navigate('/select-character', { 
+    navigate('/customize', { 
       state: { 
-        topic: `${course.dept} ${course.number}: ${course.title}`,
+        topic: `${course.name}: ${course.title}`,
         context: course.description,
         course,
       } 
@@ -65,7 +65,7 @@ export function CourseDetailPage() {
           <div className="mb-10 animate-fade-in-up">
             <div className="flex items-center gap-3 mb-4">
               <span className="px-3 py-1.5 rounded-lg bg-accent text-primary font-semibold">
-                {course.dept} {course.number}
+                {course.name}
               </span>
               <span className="px-3 py-1.5 rounded-lg bg-secondary text-muted-foreground text-sm">
                 {course.units} units
@@ -130,7 +130,7 @@ export function CourseDetailPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold mb-1 text-foreground">Delivery Method</h3>
-                  <p className="text-sm text-muted-foreground">{course.deliveryMethod}</p>
+                  <p className="text-sm text-muted-foreground">{course.delivery_method}</p>
                 </div>
               </div>
             </div>
@@ -152,24 +152,19 @@ export function CourseDetailPage() {
             )}
           </div>
 
-          {/* Offerings */}
-          {course.offerings && course.offerings.length > 0 && (
+          {/* Term & Instructors */}
+          {(course.term || course.instructors) && (
             <div className="mb-10 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-              <h2 className="text-xl font-semibold mb-4 text-foreground">Recent Offerings</h2>
+              <h2 className="text-xl font-semibold mb-4 text-foreground">Current Offering</h2>
               <div className="flex flex-wrap gap-2">
-                {course.offerings.slice(0, 6).map((offering, index) => (
-                  <div 
-                    key={index}
-                    className="px-4 py-2 rounded-lg bg-secondary border border-border text-sm"
-                  >
-                    <span className="font-medium text-foreground">{offering.term}</span>
-                    {offering.instructors.length > 0 && (
-                      <span className="text-muted-foreground ml-2">
-                        — {offering.instructors.slice(0, 2).join(', ')}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                <div className="px-4 py-2 rounded-lg bg-secondary border border-border text-sm">
+                  {course.term && <span className="font-medium text-foreground">{course.term}</span>}
+                  {course.instructors && (
+                    <span className="text-muted-foreground ml-2">
+                      — {course.instructors}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           )}

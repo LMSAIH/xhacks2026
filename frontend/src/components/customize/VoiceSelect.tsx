@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { Play, Square, Loader2 } from "lucide-react";
 import { VOICES } from "./data";
 import type { Voice } from "./data";
 import {
@@ -33,6 +34,9 @@ export function VoiceSelect({
 
   const stopCurrentAudio = () => {
     if (audioRef.current) {
+      // Remove event listeners before stopping to prevent false error events
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       audioRef.current = null;
@@ -226,11 +230,11 @@ function VoiceCard({
           aria-label={`Play ${voice.name} voice preview`}
         >
           {isLoading ? (
-            <span className="animate-spin">&#8987;</span>
+            <Loader2 className="w-4 h-4 animate-spin" />
           ) : isPlaying ? (
-            <span>&#9632;</span>
+            <Square className="w-4 h-4 fill-current" />
           ) : (
-            <span>&#9658;</span>
+            <Play className="w-4 h-4 fill-current" />
           )}
         </button>
       </div>

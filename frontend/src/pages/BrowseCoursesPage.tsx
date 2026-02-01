@@ -34,7 +34,8 @@ export function BrowseCoursesPage() {
   const loadCourses = async (dept: string) => {
     setLoading(true);
     try {
-      const results = await searchCourses({ dept, limit: 20 });
+      // Use name param to search by department prefix (e.g., "CMPT")
+      const results = await searchCourses({ name: dept });
       setCourses(results);
     } catch (error) {
       console.error("Failed to load courses:", error);
@@ -48,7 +49,8 @@ export function BrowseCoursesPage() {
     setLoading(true);
     setSelectedDept(null);
     try {
-      const results = await searchCourses({ title: searchQuery, limit: 20 });
+      // Search by name which matches course code or title
+      const results = await searchCourses({ name: searchQuery });
       setCourses(results);
     } catch (error) {
       console.error("Search failed:", error);
@@ -60,16 +62,13 @@ export function BrowseCoursesPage() {
   const handleCourseSelect = (course: Course) => {
     navigate("/customize", {
       state: {
-        topic: `${course.dept} ${course.number}: ${course.title}`,
-        courseId: `${course.dept}-${course.number}`,
+        topic: `${course.name}: ${course.title}`,
+        courseId: course.id,
         courseName: course.title,
         course,
       },
     });
   };
-
-  // Filter courses by undergraduate level
-  const filteredCourses = courses.filter((c) => c.degreeLevel === "UGRD");
 
   return (
     <PageLayout>
@@ -88,7 +87,7 @@ export function BrowseCoursesPage() {
         <div className="flex gap-2 mb-8 animate-fade-in-up">
           <input
             type="text"
-            placeholder="Search by course name..."
+            placeholder="Search by course code or name (e.g., CMPT 120)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -133,21 +132,21 @@ export function BrowseCoursesPage() {
             <div className="flex items-center justify-center py-16">
               <div className="text-muted-foreground">Loading courses...</div>
             </div>
-          ) : filteredCourses.length > 0 ? (
+          ) : courses.length > 0 ? (
             <div className="space-y-2">
               <div className="text-sm text-muted-foreground mb-4">
-                {filteredCourses.length} courses found
+                {courses.length} courses found
               </div>
-              {filteredCourses.map((course) => (
+              {courses.map((course) => (
                 <button
-                  key={`${course.dept}-${course.number}`}
+                  key={course.id}
                   onClick={() => handleCourseSelect(course)}
                   className="w-full p-5 text-left border border-border bg-card hover:border-foreground hover:bg-accent/50 transition-all"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-lg mb-1">
-                        {course.dept} {course.number}
+                        {course.name}
                       </div>
                       <div className="text-foreground/80 mb-2">
                         {course.title}
@@ -168,7 +167,7 @@ export function BrowseCoursesPage() {
           ) : selectedDept || searchQuery ? (
             <div className="text-center py-16 text-muted-foreground">
               <div className="text-4xl mb-4">🔍</div>
-              <div>No undergraduate courses found</div>
+              <div>No courses found</div>
               <div className="text-sm mt-2">Try a different search or department</div>
             </div>
           ) : (
