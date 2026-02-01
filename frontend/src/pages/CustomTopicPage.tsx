@@ -14,7 +14,7 @@ const SUGGESTED_TOPICS = [
 export function CustomTopicPage() {
   const navigate = useNavigate();
   const [topic, setTopic] = useState("");
-  const [context, setContext] = useState("");
+  const [context] = useState("");
 
   const handleStartLearning = () => {
     if (!topic.trim()) return;

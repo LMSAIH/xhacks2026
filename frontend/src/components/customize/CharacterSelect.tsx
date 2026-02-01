@@ -5,8 +5,6 @@ import {
   StepTitle,
   StepDescription,
   CardTitle,
-  CardSubtitle,
-  CardDescription,
   HelpText,
   SectionLabel,
 } from "./Typography";

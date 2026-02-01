@@ -201,6 +201,58 @@ describe('SFU AI Teacher API', () => {
     });
   });
 
+  describe('GET /api/voices/:voiceId/preview', () => {
+    it('should return 400 for invalid voice ID', async () => {
+      const req = new Request('http://localhost/api/voices/invalid-voice/preview');
+      const res = await app.fetch(req, env);
+      
+      expect(res.status).toBe(400);
+      const json = await res.json() as { success: boolean; error: string };
+      expect(json.success).toBe(false);
+      expect(json.error).toContain('Invalid voice ID');
+    });
+
+    it('should return cached audio if available', async () => {
+      const mockAudio = new Uint8Array([0x52, 0x49, 0x46, 0x46]); // RIFF header
+      env.KV.get = vi.fn().mockResolvedValue(mockAudio.buffer);
+
+      const req = new Request('http://localhost/api/voices/aura-asteria-en/preview');
+      const res = await app.fetch(req, env);
+      
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toBe('audio/wav');
+      expect(env.KV.get).toHaveBeenCalledWith('voice-preview:aura-asteria-en', 'arrayBuffer');
+    });
+
+    it('should generate and cache audio if not cached', async () => {
+      env.KV.get = vi.fn().mockResolvedValue(null);
+      env.KV.put = vi.fn().mockResolvedValue(undefined);
+      
+      const mockAudio = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00]);
+      env.AI.run = vi.fn().mockResolvedValue(mockAudio);
+
+      const req = new Request('http://localhost/api/voices/aura-orion-en/preview');
+      const res = await app.fetch(req, env);
+      
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toBe('audio/wav');
+      expect(env.AI.run).toHaveBeenCalled();
+      expect(env.KV.put).toHaveBeenCalled();
+    });
+
+    it('should handle TTS API errors gracefully', async () => {
+      env.KV.get = vi.fn().mockResolvedValue(null);
+      env.AI.run = vi.fn().mockRejectedValue(new Error('TTS service unavailable'));
+
+      const req = new Request('http://localhost/api/voices/aura-luna-en/preview');
+      const res = await app.fetch(req, env);
+      
+      expect(res.status).toBe(500);
+      const json = await res.json() as { success: boolean; error: string };
+      expect(json.success).toBe(false);
+    });
+  });
+
   describe('GET /api/config', () => {
     it('should return config with voices and defaultVoice', async () => {
       const req = new Request('http://localhost/api/config');

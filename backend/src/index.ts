@@ -171,9 +171,9 @@ app.get('/api/voices/:voiceId/preview', async (c) => {
     }
 
     // Cache the result for 24 hours
-    await c.env.KV.put(cacheKey, audioBytes, { expirationTtl: 86400 });
+    await c.env.KV.put(cacheKey, audioBytes.buffer as ArrayBuffer, { expirationTtl: 86400 });
 
-    return new Response(audioBytes, {
+    return new Response(audioBytes.buffer as ArrayBuffer, {
       headers: {
         'Content-Type': 'audio/wav',
         'Cache-Control': 'public, max-age=86400',

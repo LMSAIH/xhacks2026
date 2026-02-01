@@ -3,7 +3,6 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export function Navbar() {
   const navigate = useNavigate();
-  const location = useLocation();
 
   return (
     <header className="w-full px-6 py-4 border-b border-border bg-background/95 backdrop-blur-sm">
