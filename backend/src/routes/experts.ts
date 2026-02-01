@@ -35,6 +35,13 @@ expertsRoutes.get('/', async (c) => {
   }
 
   try {
+    // Check cache first
+    const cacheKey = `experts:${topic}:${count}`;
+    const cachedResult = await c.env.KV.get(cacheKey, 'json') as any;
+    if (cachedResult) {
+      return c.json(cachedResult);
+    }
+
     const prompt = `You are an expert researcher. Find exactly ${count} real historical or contemporary experts, scientists, or notable figures who are renowned for their contributions to "${topic}".
 
 For each expert, you MUST provide all these fields:
@@ -122,12 +129,19 @@ Focus on finding real, verifiable experts with well-documented contributions. In
       }, 500);
     }
 
-    return c.json({
+    const result = {
       success: true,
       topic,
       count: experts.length,
       experts,
+    };
+
+    // Cache the result for 24 hours
+    await c.env.KV.put(cacheKey, JSON.stringify(result), {
+      expirationTtl: 86400,
     });
+
+    return c.json(result);
   } catch (error) {
     console.error('Error finding experts:', error);
     return c.json({
@@ -247,6 +261,13 @@ expertsRoutes.get('/with-images', async (c) => {
   }
 
   try {
+    // Check cache first
+    const cacheKey = `experts:with-images:${topic}:${count}`;
+    const cachedResult = await c.env.KV.get(cacheKey, 'json') as any;
+    if (cachedResult) {
+      return c.json(cachedResult);
+    }
+
     // Step 1: Find experts using LLM
     const prompt = `You are an expert researcher. Find exactly ${count} real historical or contemporary experts, scientists, or notable figures who are renowned for their contributions to "${topic}".
 
@@ -337,12 +358,19 @@ Return ONLY a valid JSON array with NO markdown formatting, NO code blocks:
       teachingStyle: expert.teachingStyle || 'Clear explanations',
     }));
 
-    return c.json({
+    const result = {
       success: true,
       topic,
       count: finalExperts.length,
       experts: finalExperts,
+    };
+
+    // Cache the result for 24 hours
+    await c.env.KV.put(cacheKey, JSON.stringify(result), {
+      expirationTtl: 86400,
     });
+
+    return c.json(result);
   } catch (error) {
     console.error('Error finding experts with images:', error);
     return c.json({
