@@ -19,7 +19,7 @@ export function NotesEditorPage() {
         {/* Editor */}
         <BlurFade delay={0.2}>
           <div className="flex-1 px-6 py-4">
-            <NotesEditor />
+            <NotesEditor sectionId="standalone-notes" sectionTitle="Notes" />
           </div>
         </BlurFade>
       </div>

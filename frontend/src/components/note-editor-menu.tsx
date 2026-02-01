@@ -1,7 +1,7 @@
 import { insertOrUpdateBlockForSlashMenu } from '@blocknote/core/extensions';
 import { getDefaultReactSlashMenuItems } from '@blocknote/react';
 import type { DefaultReactSuggestionItem } from '@blocknote/react';
-import { Calculator, PenTool, MessageCircleQuestion, BookOpen, ClipboardCheck, FunctionSquare } from 'lucide-react';
+import { Calculator, PenTool, MessageCircleQuestion, BookOpen, ClipboardCheck, FunctionSquare, Lightbulb } from 'lucide-react';
 
 const insert = (
   editor: unknown,
@@ -156,6 +156,24 @@ export function getNotesSlashMenuItems(editor: unknown): DefaultReactSuggestionI
     subtext: 'Get relevant formulas',
   };
 
+  const suggestItem: DefaultReactSuggestionItem = {
+    title: 'Suggest Notes',
+    onItemClick: () => {
+      const notes = getEditorContent(editor);
+      // Insert aiResponse block that will generate suggestions
+      insert(editor, 'aiResponse', { 
+        prompt: notes || 'Generate starter notes',
+        response: '',
+        toolType: 'suggest',
+        isLoading: true,
+      });
+    },
+    aliases: ['suggest', 'generate', 'auto'],
+    group: 'AI Tools',
+    icon: <Lightbulb size={18} />,
+    subtext: 'AI suggests notes to add',
+  };
+
   return [
     ...defaults,
     // Custom blocks
@@ -166,5 +184,6 @@ export function getNotesSlashMenuItems(editor: unknown): DefaultReactSuggestionI
     explainItem,
     critiqueItem,
     formulasItem,
+    suggestItem,
   ];
 }

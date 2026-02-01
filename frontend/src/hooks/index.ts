@@ -5,3 +5,5 @@ export { useEditorChat } from "./use-editor-chat";
 export { useBackendConfig, useVoices } from "./use-backend-config";
 export { useCourses, useCourse, useCourseById } from "./use-courses";
 export { useExperts } from "./use-experts";
+export { useOnboardingPipeline } from "./use-onboarding-pipeline";
+export { useBackgroundCritique } from "./use-background-critique";

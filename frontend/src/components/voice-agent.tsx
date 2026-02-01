@@ -44,7 +44,7 @@ export function VoiceAgent() {
   const topic = topicState?.topic || 'General Learning';
   const topicContext = topicState?.context || '';
   const selectedVoice = topicState?.voice;
-  const _character = topicState?.character;
+  // Character available for future use: topicState?.character
   const outline = topicState?.outline;
   
   // Create a simple course code from the topic

@@ -59,8 +59,11 @@ export function useRealtimeVoice({
         console.log('Playing audio chunk...');
         
         // Wait for audio to finish playing
-        await new Promise<void>((resolve, reject) => {
+        await new Promise<void>((resolve) => {
+          let timeoutId: ReturnType<typeof setTimeout> | null = null;
+          
           const cleanup = () => {
+            if (timeoutId) clearTimeout(timeoutId);
             URL.revokeObjectURL(url);
             audio.pause();
             audio.src = '';
@@ -90,7 +93,7 @@ export function useRealtimeVoice({
           audio.addEventListener('canplay', handleCanPlay, { once: true });
           
           // Set timeout in case audio never loads
-          const timeout = setTimeout(() => {
+          timeoutId = setTimeout(() => {
             console.warn('Audio load timeout, skipping...');
             cleanup();
             resolve();
