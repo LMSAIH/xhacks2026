@@ -1,8 +1,23 @@
 # LearnLM
 
-An AI-powered tutoring platform where you learn from history's greatest minds. Select a topic, choose an AI tutor modeled after a historical figure, and learn through natural voice conversations.
+<p align="center">
+  <img src="assets/logo.png" alt="LearnLM Logo" width="400" />
+</p>
 
-**Live Demo**: [learn-lm.com](https://learn-lm.com)
+<p align="center">
+  <strong>Learn from history's greatest minds</strong>
+</p>
+
+<p align="center">
+  <a href="https://learn-lm.com">Live Demo</a> •
+  <a href="docs/FEATURES.md">Features</a> •
+  <a href="docs/API.md">API</a> •
+  <a href="docs/MCP.md">MCP Server</a>
+</p>
+
+---
+
+An AI-powered tutoring platform where you learn from history's greatest minds. Select a topic, choose an AI tutor modeled after a historical figure, and learn through natural voice conversations.
 
 > Built by **Team The Smurfs** for **SystemHacks:XHacks 2026** — SFU's SSSS Hackathon
 
