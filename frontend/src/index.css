@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+
+@source "../node_modules/@blocknote/shadcn";
+
 @layer base {
   :root {
     --background: 0 0% 3.9%;

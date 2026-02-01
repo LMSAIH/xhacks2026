@@ -214,8 +214,8 @@ export function VoiceAgent() {
           {/* Hint text */}
           <p className="text-xs text-muted-foreground mt-6 text-center max-w-xs">
             {isConnected
-              ? isVadActive 
-                ? '🎤 Hands-free mode active — just speak naturally'
+              ? isVadActive
+                ? 'Hands-free mode active — just speak naturally'
                 : 'Hold the mic button and speak — release when done'
               : 'Press the call button to start a conversation'}
           </p>
@@ -307,7 +307,7 @@ export function VoiceAgent() {
                 <div className="pt-4 border-t border-border">
                   <h3 className="text-sm font-medium mb-2">Voice Mode</h3>
                   <p className="text-xs text-muted-foreground">
-                    {isVadActive ? '✅ Hands-free (auto-detect speech)' : '🎤 Push-to-talk'}
+                    {isVadActive ? 'Hands-free (auto-detect speech)' : 'Push-to-talk'}
                   </p>
                 </div>
               </div>
