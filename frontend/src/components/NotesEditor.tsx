@@ -14,12 +14,13 @@ import { filterSuggestionItems } from '@blocknote/core/extensions';
 import katex from 'katex';
 // @ts-expect-error no types for react-katex
 import { BlockMath, InlineMath } from 'react-katex';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { ReactSketchCanvas, type ReactSketchCanvasRef } from 'react-sketch-canvas';
 import { getNotesSlashMenuItems } from '@/components/note-editor-menu';
 import * as Button from '@/components/ui/button';
 import * as Card from '@/components/ui/card';
 import { Button as ShadButton } from '@/components/ui/button';
+import { useTheme } from '@/components/ui/theme-provider';
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -238,17 +239,93 @@ const notesSchema = BlockNoteSchema.create({
 });
 
 // --- Notes editor ---
-export function NotesEditor() {
+interface NotesEditorProps {
+  sectionId?: string;
+  sectionTitle?: string;
+}
+
+// Store notes content per section in localStorage
+const STORAGE_KEY = 'notes-editor-content';
+
+function getStoredNotes(): Record<string, any[]> {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveNotes(sectionId: string, content: any[]) {
+  try {
+    const stored = getStoredNotes();
+    stored[sectionId] = content;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+  } catch (e) {
+    console.error('Failed to save notes:', e);
+  }
+}
+
+export function NotesEditor({ sectionId = 'default', sectionTitle }: NotesEditorProps) {
+  const { resolvedTheme } = useTheme();
+  const [key, setKey] = useState(sectionId);
+  
+  // Get initial content for this section
+  const getInitialContent = () => {
+    const stored = getStoredNotes();
+    if (stored[sectionId] && stored[sectionId].length > 0) {
+      return stored[sectionId];
+    }
+    // Default content with section title as heading
+    return [
+      {
+        type: "heading",
+        props: { level: 2 },
+        content: sectionTitle || "Notes",
+      },
+      {
+        type: "paragraph",
+        content: [],
+      },
+    ];
+  };
+
   const editor = useCreateBlockNote({
     schema: notesSchema,
     uploadFile: async (file: File) => fileToDataUrl(file),
+    initialContent: getInitialContent(),
   });
 
+  // Re-create editor when section changes
+  useEffect(() => {
+    if (sectionId !== key) {
+      // Save current content before switching
+      const currentContent = editor.document;
+      if (key && currentContent) {
+        saveNotes(key, currentContent);
+      }
+      setKey(sectionId);
+    }
+  }, [sectionId, key, editor]);
+
+  // Save content on changes (debounced via effect)
+  useEffect(() => {
+    const handleChange = () => {
+      const content = editor.document;
+      if (content) {
+        saveNotes(sectionId, content);
+      }
+    };
+
+    // Subscribe to changes
+    editor.onChange(handleChange);
+  }, [editor, sectionId]);
+
   return (
-    <div className="h-full w-full min-h-[400px] rounded-lg border border-border bg-card">
+    <div className="h-full w-full overflow-auto border border-border bg-background" key={key}>
       <BlockNoteView
         editor={editor}
-        theme="dark"
+        theme={resolvedTheme}
         slashMenu={false}
         shadCNComponents={{
           Button,
