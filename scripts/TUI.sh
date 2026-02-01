@@ -170,23 +170,25 @@ draw_menu() {
         
         # Instructions
         move_cursor $((start_y + menu_height + 1)) $((start_x + 2)) >&2
-        printf "${DIM}Up/Down: Navigate | Enter: Select | q: Quit${RESET}" >&2
+        printf "${DIM}j/k: Navigate | 1-9: Quick select | Enter: Select | q: Quit${RESET}" >&2
         
         # Read key - handle escape sequences for arrow keys
         IFS= read -rsn1 key
         
-        # Check for escape sequence (arrow keys)
+        # Check for escape sequence (arrow keys send \e[A, \e[B, etc.)
         if [[ "$key" == $'\x1b' ]]; then
-            read -rsn2 -t 0.1 rest
-            key+="$rest"
+            # Read the rest of the escape sequence with longer timeout
+            read -rsn1 -t 1 char1
+            read -rsn1 -t 1 char2
+            key="${key}${char1}${char2}"
         fi
         
         case "$key" in
-            $'\x1b[A'|k) # Up arrow or k
+            $'\x1b[A'|$'\eOA'|k|K) # Up arrow or k
                 ((selected--)) || true
                 [[ $selected -lt 0 ]] && selected=$((num_options - 1))
                 ;;
-            $'\x1b[B'|j) # Down arrow or j
+            $'\x1b[B'|$'\eOB'|j|J) # Down arrow or j
                 ((selected++)) || true
                 [[ $selected -ge $num_options ]] && selected=0
                 ;;
@@ -197,6 +199,13 @@ draw_menu() {
             q|Q)
                 echo -1
                 return
+                ;;
+            [1-9]) # Number keys for quick select
+                local num=$((key - 1))
+                if [[ $num -lt $num_options ]]; then
+                    echo $num
+                    return
+                fi
                 ;;
         esac
     done
