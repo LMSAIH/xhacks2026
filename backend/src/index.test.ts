@@ -208,36 +208,84 @@ describe('SFU AI Teacher API', () => {
   });
 
   describe('GET /api/courses', () => {
-    it('should return empty courses array (placeholder)', async () => {
+    it('should return courses array from database', async () => {
       const req = new Request('http://localhost/api/courses');
       const res = await app.fetch(req, env);
       
       expect(res.status).toBe(200);
       const json = await res.json() as { courses: any[] };
-      expect(json.courses).toEqual([]);
+      expect(Array.isArray(json.courses)).toBe(true);
+    });
+
+    it('should support name filter query param', async () => {
+      const req = new Request('http://localhost/api/courses?name=CMPT');
+      const res = await app.fetch(req, env);
+      
+      expect(res.status).toBe(200);
+      const json = await res.json() as { courses: any[] };
+      expect(Array.isArray(json.courses)).toBe(true);
     });
   });
 
-  describe('GET /api/courses/:code', () => {
-    it('should return course code in response', async () => {
+  describe('GET /api/courses/:name', () => {
+    it('should return course object for given name', async () => {
       const req = new Request('http://localhost/api/courses/CMPT120');
       const res = await app.fetch(req, env);
       
       expect(res.status).toBe(200);
-      const json = await res.json() as { course: null; code: string };
-      expect(json.code).toBe('CMPT120');
-      expect(json.course).toBeNull();
+      const json = await res.json() as { course: any };
+      expect(json).toHaveProperty('course');
     });
 
-    it('should handle various course codes', async () => {
-      const codes = ['MATH151', 'ENGL100', 'BUS237', 'STAT270'];
+    it('should handle various course names', async () => {
+      const names = ['MATH151', 'ENGL100', 'BUS237', 'STAT270'];
       
-      for (const code of codes) {
-        const req = new Request(`http://localhost/api/courses/${code}`);
+      for (const name of names) {
+        const req = new Request(`http://localhost/api/courses/${name}`);
         const res = await app.fetch(req, env);
-        const json = await res.json() as { code: string };
-        expect(json.code).toBe(code);
+        expect(res.status).toBe(200);
       }
+    });
+  });
+
+  describe('GET /api/courses/id/:id', () => {
+    it('should return course by id', async () => {
+      const req = new Request('http://localhost/api/courses/id/123');
+      const res = await app.fetch(req, env);
+      
+      expect(res.status).toBe(200);
+      const json = await res.json() as { course: any };
+      expect(json).toHaveProperty('course');
+    });
+  });
+
+  describe('GET /api/courses/update/', () => {
+    it('should trigger course update from SFU API', async () => {
+      // Mock fetch for SFU API call
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      const req = new Request('http://localhost/api/courses/update/');
+      const res = await app.fetch(req, env);
+      
+      expect(res.status).toBe(200);
+      const json = await res.json() as { success: boolean; message: string; coursesAdded: number };
+      expect(json).toHaveProperty('success');
+      expect(json).toHaveProperty('coursesAdded');
+    });
+
+    it('should accept term query parameter', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      const req = new Request('http://localhost/api/courses/update/?term=Spring%202026');
+      const res = await app.fetch(req, env);
+      
+      expect(res.status).toBe(200);
     });
   });
 
