@@ -8,15 +8,12 @@ export function Navbar() {
   return (
     <header className="w-full px-6 py-4 border-b border-border bg-background/95 backdrop-blur-sm">
       <div className="max-w-5xl mx-auto flex items-center justify-between">
-        {/* Left side - Logo */}
+        {/* Left side - Brand */}
         <button
           onClick={() => navigate("/")}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          className="hover:opacity-80 transition-opacity"
         >
-          <div className="w-8 h-8 bg-foreground text-background flex items-center justify-center text-xs font-bold">
-            LB
-          </div>
-          <span className="font-semibold hidden sm:inline">Learn from the Best</span>
+          <span className="text-xl font-bold tracking-tight">LearnLM</span>
         </button>
 
         {/* Right side - Navigation & Theme Toggle */}

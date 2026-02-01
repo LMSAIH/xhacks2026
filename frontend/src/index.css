@@ -7,6 +7,33 @@
   mix-blend-mode: normal;
 }
 
+/* Marquee animations - MagicUI */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+  }
+}
+
+@keyframes marquee-vertical {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(-100% - var(--gap)));
+  }
+}
+
+.animate-marquee {
+  animation: marquee var(--duration) infinite linear;
+}
+
+.animate-marquee-vertical {
+  animation: marquee-vertical var(--duration) linear infinite;
+}
+
 /* Custom scrollbar */
 .scrollbar-thin {
   scrollbar-width: thin;
@@ -53,7 +80,7 @@
     --input: 0 0% 85%;
     --ring: 0 0% 9%;
     --radius: 0.25rem;
-    
+
     /* Retro monospace font */
     --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
     --font-display: 'Space Mono', 'IBM Plex Mono', monospace;
@@ -88,23 +115,23 @@
   * {
     @apply border-border;
   }
-  
+
   /* Smooth theme transition */
   html {
     transition: background-color 0.4s ease, color 0.4s ease;
   }
-  
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-body);
     transition: background-color 0.4s ease, color 0.4s ease;
   }
-  
+
   /* Apply transition to common elements for smooth theme switch */
   div, header, footer, main, section, nav, button, a, input, textarea {
     transition: background-color 0.4s ease, border-color 0.4s ease, color 0.3s ease;
   }
-  
+
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     font-weight: 600;
@@ -354,30 +381,4 @@
     hsl(var(--foreground) / 0.02) 4px
   );
   pointer-events: none;
-}
-
-@theme inline {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
-  --radius-sm: calc(var(--radius) - 2px);
-  --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 2px);
-  --radius-xl: calc(var(--radius) + 4px);
 }

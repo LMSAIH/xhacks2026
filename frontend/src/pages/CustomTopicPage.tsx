@@ -3,18 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { PageLayout } from "@/components/layout";
 
 const SUGGESTED_TOPICS = [
-  { name: "JavaScript Fundamentals", icon: "💻", category: "Programming" },
-  { name: "Machine Learning Basics", icon: "🤖", category: "AI" },
-  { name: "World History", icon: "🌍", category: "History" },
-  { name: "Creative Writing", icon: "✍️", category: "Arts" },
-  { name: "Organic Chemistry", icon: "🧪", category: "Science" },
-  { name: "Personal Finance", icon: "💰", category: "Business" },
+  { name: "JavaScript Fundamentals", category: "Programming" },
+  { name: "Machine Learning Basics", category: "AI" },
+  { name: "World History", category: "History" },
+  { name: "Creative Writing", category: "Arts" },
+  { name: "Organic Chemistry", category: "Science" },
+  { name: "Personal Finance", category: "Business" },
 ];
 
 export function CustomTopicPage() {
   const navigate = useNavigate();
   const [topic, setTopic] = useState("");
-  const [context, setContext] = useState("");
 
   const handleStartLearning = () => {
     if (!topic.trim()) return;
@@ -22,7 +21,6 @@ export function CustomTopicPage() {
     navigate("/customize", {
       state: {
         topic: topic.trim(),
-        context: context.trim() || undefined,
       },
     });
   };
@@ -77,7 +75,6 @@ export function CustomTopicPage() {
                     : "bg-card border-border hover:border-foreground"
                 }`}
               >
-                <span className="text-2xl block mb-2">{suggestion.icon}</span>
                 <span className="font-medium block">{suggestion.name}</span>
                 <span
                   className={`text-sm ${

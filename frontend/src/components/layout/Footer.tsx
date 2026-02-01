@@ -11,12 +11,9 @@ export function Footer() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate("/")}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              className="hover:opacity-80 transition-opacity"
             >
-              <div className="w-6 h-6 bg-foreground text-background flex items-center justify-center text-[10px] font-bold">
-                LB
-              </div>
-              <span className="text-sm font-medium">Learn from the Best</span>
+              <span className="text-sm font-bold tracking-tight">LearnLM</span>
             </button>
             <span className="text-muted-foreground text-xs">© 2026</span>
           </div>

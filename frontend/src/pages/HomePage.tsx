@@ -2,6 +2,30 @@ import { useNavigate } from "react-router-dom";
 import { PageLayout } from "@/components/layout";
 import { CHARACTERS } from "@/components/customize";
 import { BlurFade } from "@/components/ui/blur-fade";
+import { Marquee } from "@/components/ui/marquee";
+
+// Duplicate tutors for more content in the marquee
+const TUTORS_ROW_1 = [...CHARACTERS];
+const TUTORS_ROW_2 = [...CHARACTERS].reverse();
+
+function TutorCard({ tutor, onClick }: { tutor: typeof CHARACTERS[0]; onClick: () => void }) {
+  return (
+    <div
+      className="text-center group cursor-pointer shrink-0 w-32"
+      onClick={onClick}
+    >
+      <div className="w-32 h-32 overflow-hidden border border-border mb-3 group-hover:border-foreground transition-all duration-300">
+        <img
+          src={tutor.image}
+          alt={tutor.name}
+          className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-300"
+        />
+      </div>
+      <div className="font-medium text-sm">{tutor.name}</div>
+      <div className="text-xs text-muted-foreground truncate">{tutor.title}</div>
+    </div>
+  );
+}
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -56,9 +80,9 @@ export function HomePage() {
           </div>
         </section>
 
-        {/* Tutors Preview */}
-        <section className="px-6 py-12 border-t border-border bg-card/30">
-          <div className="max-w-5xl mx-auto">
+        {/* Tutors Preview - Marquee */}
+        <section className="py-12 border-y-2 border-foreground bg-card overflow-hidden">
+          <div className="max-w-5xl mx-auto px-6">
             <BlurFade delay={0.1} inView>
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-semibold mb-2">Meet Your Tutors</h2>
@@ -67,74 +91,86 @@ export function HomePage() {
                 </p>
               </div>
             </BlurFade>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {CHARACTERS.map((tutor, index) => (
-                <BlurFade key={tutor.id} delay={0.15 + index * 0.05} inView>
-                  <div
-                    className="text-center group cursor-pointer"
-                    onClick={() => navigate("/select-topic")}
-                  >
-                    <div className="w-full aspect-square overflow-hidden border border-border mb-3 group-hover:border-foreground transition-colors">
-                      <img
-                        src={tutor.image}
-                        alt={tutor.name}
-                        className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all"
-                      />
-                    </div>
-                    <div className="font-medium text-sm">{tutor.name}</div>
-                    <div className="text-xs text-muted-foreground">{tutor.title}</div>
-                  </div>
-                </BlurFade>
-              ))}
-            </div>
           </div>
+
+          {/* First row - moves left */}
+          <BlurFade delay={0.2} inView>
+            <Marquee pauseOnHover className="[--duration:30s] mb-6">
+              {TUTORS_ROW_1.map((tutor) => (
+                <TutorCard
+                  key={tutor.id}
+                  tutor={tutor}
+                  onClick={() => navigate("/select-topic")}
+                />
+              ))}
+            </Marquee>
+          </BlurFade>
+
+          {/* Second row - moves right */}
+          <BlurFade delay={0.3} inView>
+            <Marquee reverse pauseOnHover className="[--duration:35s]">
+              {TUTORS_ROW_2.map((tutor) => (
+                <TutorCard
+                  key={tutor.id}
+                  tutor={tutor}
+                  onClick={() => navigate("/select-topic")}
+                />
+              ))}
+            </Marquee>
+          </BlurFade>
         </section>
 
         {/* How it works */}
-        <section className="px-6 py-16">
+        <section className="px-6 py-20 border-t border-border">
           <div className="max-w-4xl mx-auto">
             <BlurFade delay={0.1} inView>
-              <div className="text-center mb-12">
-                <h2 className="text-2xl font-semibold mb-2">How It Works</h2>
+              <div className="text-center mb-16">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Simple Process</p>
+                <h2 className="text-3xl font-bold mb-3">How It Works</h2>
                 <p className="text-muted-foreground">
                   Get started in three simple steps
                 </p>
               </div>
             </BlurFade>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <BlurFade delay={0.2} inView>
-                <div className="text-center">
-                  <div className="w-16 h-16 mx-auto mb-4 bg-muted flex items-center justify-center text-2xl font-bold">
-                    1
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <BlurFade delay={0.2} inView className="h-full">
+                <div className="group h-full p-6 border-2 border-foreground hover:bg-foreground hover:text-background transition-all duration-300">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 border-2 border-foreground group-hover:border-background flex items-center justify-center text-xl font-bold transition-colors duration-300">
+                      1
+                    </div>
                   </div>
-                  <h3 className="font-semibold mb-2">Choose a Topic</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="font-semibold text-lg mb-2">Choose a Topic</h3>
+                  <p className="text-sm text-muted-foreground group-hover:text-background/70 leading-relaxed transition-colors duration-300">
                     Pick from SFU courses or enter any subject you want to learn about
                   </p>
                 </div>
               </BlurFade>
 
-              <BlurFade delay={0.3} inView>
-                <div className="text-center">
-                  <div className="w-16 h-16 mx-auto mb-4 bg-muted flex items-center justify-center text-2xl font-bold">
-                    2
+              <BlurFade delay={0.3} inView className="h-full">
+                <div className="group h-full p-6 border-2 border-foreground hover:bg-foreground hover:text-background transition-all duration-300">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 border-2 border-foreground group-hover:border-background flex items-center justify-center text-xl font-bold transition-colors duration-300">
+                      2
+                    </div>
                   </div>
-                  <h3 className="font-semibold mb-2">Pick Your Tutor</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="font-semibold text-lg mb-2">Pick Your Tutor</h3>
+                  <p className="text-sm text-muted-foreground group-hover:text-background/70 leading-relaxed transition-colors duration-300">
                     Select a historical figure whose teaching style resonates with you
                   </p>
                 </div>
               </BlurFade>
 
-              <BlurFade delay={0.4} inView>
-                <div className="text-center">
-                  <div className="w-16 h-16 mx-auto mb-4 bg-muted flex items-center justify-center text-2xl font-bold">
-                    3
+              <BlurFade delay={0.4} inView className="h-full">
+                <div className="group h-full p-6 border-2 border-foreground hover:bg-foreground hover:text-background transition-all duration-300">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 border-2 border-foreground group-hover:border-background flex items-center justify-center text-xl font-bold transition-colors duration-300">
+                      3
+                    </div>
                   </div>
-                  <h3 className="font-semibold mb-2">Start Talking</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="font-semibold text-lg mb-2">Start Talking</h3>
+                  <p className="text-sm text-muted-foreground group-hover:text-background/70 leading-relaxed transition-colors duration-300">
                     Have a natural voice conversation — ask questions, get explanations
                   </p>
                 </div>

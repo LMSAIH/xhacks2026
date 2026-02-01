@@ -54,16 +54,40 @@ export async function updateCoursesFromAPI(env: Env, term: string): Promise<{
 
       const courseCode = `${course.dept} ${course.number}`;
       
+      // Get the term offering info
+      const termOffering = course.offerings?.find(o => o.term === term);
+      const instructors = termOffering?.instructors?.join(', ') || '';
+      
       try {
-        // Insert the course (no unique constraint issues since we cleared the DB)
+        // Insert the course with all fields
         await env.DB.prepare(`
           INSERT INTO sfu_courses (
             name,
-            description
-          ) VALUES (?, ?)
+            title,
+            description,
+            units,
+            prerequisites,
+            corequisites,
+            notes,
+            designation,
+            delivery_method,
+            degree_level,
+            term,
+            instructors
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           courseCode,
-          course.description
+          course.title || '',
+          course.description || '',
+          course.units || '',
+          course.prerequisites || '',
+          course.corequisites || '',
+          course.notes || '',
+          course.designation || '',
+          course.deliveryMethod || '',
+          course.degreeLevel || '',
+          term,
+          instructors
         ).run();
 
         coursesAdded++;

@@ -1,4 +1,3 @@
-import { VOICES } from "./data";
 import type { Voice } from "./data";
 import {
   StepTitle,
@@ -6,6 +5,7 @@ import {
   HelpText,
 } from "./Typography";
 import { BlurFade } from "@/components/ui/blur-fade";
+import { useVoices } from "@/hooks/use-backend-config";
 
 interface VoiceSelectProps {
   selectedId: string | null;
@@ -22,6 +22,9 @@ export function VoiceSelect({
   onBack,
   onContinue,
 }: VoiceSelectProps) {
+  // Fetch voices from backend (falls back to local VOICES if unavailable)
+  const { voices, loading } = useVoices();
+
   const playPreview = (voiceId: string) => {
     const audio = new Audio(`/samples/${voiceId}.mp3`);
     audio.play().catch(() => {
@@ -42,19 +45,26 @@ export function VoiceSelect({
         </div>
       </BlurFade>
 
-      {/* Voice Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-        {VOICES.map((voice, index) => (
-          <BlurFade key={voice.id} delay={0.15 + index * 0.05}>
-            <VoiceCard
-              voice={voice}
-              isSelected={selectedId === voice.id}
-              onSelect={() => onSelect(voice.id)}
-              onPlayPreview={() => playPreview(voice.id)}
-            />
-          </BlurFade>
-        ))}
-      </div>
+      {/* Loading state */}
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="text-muted-foreground">Loading voices...</div>
+        </div>
+      ) : (
+        /* Voice Grid */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+          {voices.map((voice, index) => (
+            <BlurFade key={voice.id} delay={0.15 + index * 0.05}>
+              <VoiceCard
+                voice={voice}
+                isSelected={selectedId === voice.id}
+                onSelect={() => onSelect(voice.id)}
+                onPlayPreview={() => playPreview(voice.id)}
+              />
+            </BlurFade>
+          ))}
+        </div>
+      )}
 
       {/* Tip */}
       <BlurFade delay={0.4}>

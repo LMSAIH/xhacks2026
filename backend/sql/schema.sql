@@ -23,7 +23,17 @@ DROP TABLE IF EXISTS sfu_courses;
 CREATE TABLE sfu_courses (
   id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   name TEXT NOT NULL UNIQUE,   -- Combined "DEPT NUMBER" e.g., "CMPT 225"
+  title TEXT,                  -- Course title e.g., "Introduction to Computing Science"
   description TEXT,
+  units TEXT,
+  prerequisites TEXT,
+  corequisites TEXT,
+  notes TEXT,
+  designation TEXT,
+  delivery_method TEXT,
+  degree_level TEXT,
+  term TEXT,
+  instructors TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
