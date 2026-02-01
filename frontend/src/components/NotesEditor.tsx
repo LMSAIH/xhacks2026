@@ -21,7 +21,7 @@ import * as Button from '@/components/ui/button';
 import * as Card from '@/components/ui/card';
 import { Button as ShadButton } from '@/components/ui/button';
 import { useTheme } from '@/components/ui/theme-provider';
-import { Loader2, Sparkles, Copy, Check, Plus, X, CheckCircle, AlertCircle, PlusCircle, MinusCircle, MessageSquare, Lightbulb } from 'lucide-react';
+import { Loader2, Sparkles, Copy, Check, Plus, X, CheckCircle, AlertCircle, PlusCircle, MinusCircle, MessageSquare, Lightbulb, Download, Upload } from 'lucide-react';
 import { useBackgroundCritique } from '@/hooks/use-background-critique';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -1114,11 +1114,136 @@ export interface NotesEditorHandle {
   insertCritiqueBlock: (critiqueData: unknown) => void;
   insertResponseBlock: (toolType: string, prompt: string, response: string) => void;
   insertSummary: (summary: string) => void;
+  exportToMarkdown: () => string;
+  importFromMarkdown: (markdown: string) => Promise<void>;
 }
 
 // Sanitize section ID for use as localStorage key
 function sanitizeStorageKey(id: string): string {
   return id.replace(/[^a-zA-Z0-9-_]/g, '_');
+}
+
+// Convert blocks to markdown with custom block handling
+function blocksToMarkdown(document: Array<{ type: string; content?: unknown; props?: Record<string, unknown> }>): string {
+  const extractInlineContent = (content: unknown): string => {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content.map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+          if ('text' in item) {
+            let text = (item as { text: string }).text;
+            // Handle inline styles
+            if ('styles' in item) {
+              const styles = item.styles as Record<string, boolean>;
+              if (styles.bold) text = `**${text}**`;
+              if (styles.italic) text = `*${text}*`;
+              if (styles.code) text = `\`${text}\``;
+              if (styles.strike) text = `~~${text}~~`;
+            }
+            return text;
+          }
+          if ('content' in item) return extractInlineContent((item as { content: unknown }).content);
+        }
+        return '';
+      }).join('');
+    }
+    return '';
+  };
+
+  const lines: string[] = [];
+  
+  for (const block of document) {
+    switch (block.type) {
+      case 'heading': {
+        const level = (block.props?.level as number) || 1;
+        const prefix = '#'.repeat(level);
+        lines.push(`${prefix} ${extractInlineContent(block.content)}`);
+        break;
+      }
+      case 'paragraph': {
+        lines.push(extractInlineContent(block.content));
+        break;
+      }
+      case 'bulletListItem': {
+        lines.push(`- ${extractInlineContent(block.content)}`);
+        break;
+      }
+      case 'numberedListItem': {
+        lines.push(`1. ${extractInlineContent(block.content)}`);
+        break;
+      }
+      case 'checkListItem': {
+        const checked = block.props?.checked ? 'x' : ' ';
+        lines.push(`- [${checked}] ${extractInlineContent(block.content)}`);
+        break;
+      }
+      case 'codeBlock': {
+        const language = (block.props?.language as string) || '';
+        lines.push(`\`\`\`${language}`);
+        lines.push(extractInlineContent(block.content));
+        lines.push('```');
+        break;
+      }
+      case 'math': {
+        const latex = block.props?.latex as string;
+        if (latex) {
+          const displayMode = block.props?.displayMode !== false;
+          if (displayMode) {
+            lines.push(`$$${latex}$$`);
+          } else {
+            lines.push(`$${latex}$`);
+          }
+        }
+        break;
+      }
+      case 'pen': {
+        const dataUrl = block.props?.dataUrl as string;
+        if (dataUrl) {
+          lines.push(`![Drawing](${dataUrl})`);
+        } else {
+          lines.push('<!-- Empty drawing block -->');
+        }
+        break;
+      }
+      case 'image': {
+        const url = block.props?.url as string;
+        const caption = block.props?.caption as string || 'Image';
+        if (url) {
+          lines.push(`![${caption}](${url})`);
+        }
+        break;
+      }
+      case 'table': {
+        // Skip tables for now - complex to serialize
+        lines.push('<!-- Table block (not exported) -->');
+        break;
+      }
+      case 'aiResponse': {
+        // Export AI responses as blockquotes
+        const response = block.props?.response as string;
+        const toolType = block.props?.toolType as string;
+        if (response) {
+          lines.push(`> **AI ${toolType || 'Response'}:**`);
+          response.split('\n').forEach(line => {
+            lines.push(`> ${line}`);
+          });
+        }
+        break;
+      }
+      case 'aiCritique':
+      case 'aiInput':
+        // Skip these ephemeral AI blocks
+        break;
+      default:
+        // For unknown blocks, try to extract text content
+        const text = extractInlineContent(block.content);
+        if (text) lines.push(text);
+    }
+  }
+  
+  return lines.join('\n\n');
 }
 
 // Extract plain text from editor blocks (shared helper)
@@ -1265,7 +1390,27 @@ const NotesEditorInner = forwardRef<NotesEditorHandle, NotesEditorProps>(
         );
       }
     },
-  }), [editor]);
+    exportToMarkdown: () => {
+      return blocksToMarkdown(editor.document as Array<{ type: string; content?: unknown; props?: Record<string, unknown> }>);
+    },
+    importFromMarkdown: async (markdown: string) => {
+      try {
+        // Parse markdown to BlockNote blocks
+        const blocks = await editor.tryParseMarkdownToBlocks(markdown);
+        
+        if (blocks.length > 0) {
+          // Replace all content with imported blocks
+          editor.replaceBlocks(editor.document, blocks);
+          
+          // Save to localStorage
+          localStorage.setItem(storageKey, JSON.stringify(editor.document));
+        }
+      } catch (e) {
+        console.error('Failed to import markdown:', e);
+        throw new Error('Failed to parse markdown content');
+      }
+    },
+  }), [editor, storageKey]);
 
   // Save to localStorage on change and trigger background critique
   useEffect(() => {
@@ -1281,9 +1426,84 @@ const NotesEditorInner = forwardRef<NotesEditorHandle, NotesEditorProps>(
     editor.onChange(saveContent);
   }, [editor, storageKey, onCritiqueContentChange]);
 
+  // File input ref for import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Export handler - downloads markdown file
+  const handleExport = useCallback(() => {
+    const markdown = blocksToMarkdown(editor.document as Array<{ type: string; content?: unknown; props?: Record<string, unknown> }>);
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${sectionTitle.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}-notes.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [editor, sectionTitle]);
+
+  // Import handler - reads and parses markdown file
+  const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const blocks = await editor.tryParseMarkdownToBlocks(text);
+      
+      if (blocks.length > 0) {
+        // Replace all content with imported blocks
+        editor.replaceBlocks(editor.document, blocks);
+        
+        // Save to localStorage
+        localStorage.setItem(storageKey, JSON.stringify(editor.document));
+      }
+    } catch (err) {
+      console.error('Failed to import markdown:', err);
+      alert('Failed to import markdown file. Please check the file format.');
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [editor, storageKey]);
+
   return (
     <SessionContext.Provider value={sessionId || null}>
-    <div className="relative h-full w-full min-h-[400px] rounded-lg border border-border bg-card">
+    <div className="relative h-full w-full min-h-[400px] rounded-lg border border-border bg-card flex flex-col">
+      {/* Import/Export Toolbar */}
+      <div className="flex items-center justify-end gap-2 px-3 py-2 border-b border-border bg-muted/30">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".md,.markdown,.txt"
+          onChange={handleImport}
+          className="hidden"
+        />
+        <ShadButton
+          variant="ghost"
+          size="sm"
+          onClick={() => fileInputRef.current?.click()}
+          className="h-7 px-2 text-xs gap-1.5"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          Import
+        </ShadButton>
+        <ShadButton
+          variant="ghost"
+          size="sm"
+          onClick={handleExport}
+          className="h-7 px-2 text-xs gap-1.5"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export
+        </ShadButton>
+      </div>
+      
+      {/* Editor */}
+      <div className="flex-1 overflow-auto">
       <BlockNoteView
         editor={editor}
         theme={resolvedTheme}
@@ -1303,6 +1523,7 @@ const NotesEditorInner = forwardRef<NotesEditorHandle, NotesEditorProps>(
           }
         />
       </BlockNoteView>
+      </div>
       
       {/* Subtle background critique feedback */}
       {(showCritiqueFeedback || critiqueLoading) && (
