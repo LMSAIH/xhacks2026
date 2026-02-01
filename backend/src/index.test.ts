@@ -220,7 +220,7 @@ describe('SFU AI Teacher API', () => {
       const res = await app.fetch(req, env);
       
       expect(res.status).toBe(200);
-      expect(res.headers.get('Content-Type')).toBe('audio/wav');
+      expect(res.headers.get('Content-Type')).toBe('audio/mpeg');
       expect(env.KV.get).toHaveBeenCalledWith('voice-preview:aura-asteria-en', 'arrayBuffer');
     });
 
@@ -235,7 +235,7 @@ describe('SFU AI Teacher API', () => {
       const res = await app.fetch(req, env);
       
       expect(res.status).toBe(200);
-      expect(res.headers.get('Content-Type')).toBe('audio/wav');
+      expect(res.headers.get('Content-Type')).toBe('audio/mpeg');
       expect(env.AI.run).toHaveBeenCalled();
       expect(env.KV.put).toHaveBeenCalled();
     });

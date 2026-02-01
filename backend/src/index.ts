@@ -130,6 +130,21 @@ const VOICE_SAMPLES: Record<string, string> = {
   'aura-zeus-en': "Welcome, student! I am Zeus. Together, we shall conquer this subject and achieve greatness!",
 };
 
+// Map voice IDs to Deepgram Aura speaker names
+const VOICE_TO_SPEAKER: Record<string, string> = {
+  'aura-asteria-en': 'asteria',
+  'aura-luna-en': 'luna',
+  'aura-athena-en': 'athena',
+  'aura-hera-en': 'hera',
+  'aura-orion-en': 'orion',
+  'aura-arcas-en': 'arcas',
+  'aura-perseus-en': 'perseus',
+  'aura-angus-en': 'angus',
+  'aura-orpheus-en': 'orpheus',
+  'aura-helios-en': 'helios',
+  'aura-zeus-en': 'zeus',
+};
+
 // Generate TTS preview for a voice
 app.get('/api/voices/:voiceId/preview', async (c) => {
   const voiceId = c.req.param('voiceId');
@@ -145,37 +160,60 @@ app.get('/api/voices/:voiceId/preview', async (c) => {
   if (cached) {
     return new Response(cached, {
       headers: {
-        'Content-Type': 'audio/wav',
+        'Content-Type': 'audio/mpeg',
         'Cache-Control': 'public, max-age=86400',
       },
     });
   }
 
-  // Get sample text for this voice
+  // Get sample text and speaker name for this voice
   const sampleText = VOICE_SAMPLES[voiceId] || "Hello! I'm your AI tutor. Let's start learning together.";
+  const speaker = VOICE_TO_SPEAKER[voiceId] || 'angus';
 
   try {
-    // Generate TTS using Workers AI
+    // Generate TTS using Workers AI - Deepgram Aura model
     // @ts-expect-error - model exists in Workers AI
-    const ttsResult = await c.env.AI.run(`@cf/deepgram/${voiceId}`, {
+    const ttsResult = await c.env.AI.run('@cf/deepgram/aura-1', {
       text: sampleText,
-    }) as Uint8Array | { audio: Uint8Array };
+      speaker: speaker,
+    }, {
+      returnRawResponse: true,
+    });
 
-    let audioBytes: Uint8Array;
-    if (ttsResult instanceof Uint8Array) {
+    // The result should be a Response with audio data
+    if (ttsResult instanceof Response) {
+      const audioBytes = await ttsResult.arrayBuffer();
+      
+      // Cache the result for 24 hours
+      await c.env.KV.put(cacheKey, audioBytes, { expirationTtl: 86400 });
+
+      return new Response(audioBytes, {
+        headers: {
+          'Content-Type': 'audio/mpeg',
+          'Cache-Control': 'public, max-age=86400',
+        },
+      });
+    }
+
+    // Fallback for other response formats
+    let audioBytes: ArrayBuffer;
+    if (ttsResult instanceof ArrayBuffer) {
       audioBytes = ttsResult;
-    } else if (ttsResult && 'audio' in ttsResult) {
-      audioBytes = ttsResult.audio;
+    } else if (ttsResult instanceof Uint8Array) {
+      audioBytes = ttsResult.buffer as ArrayBuffer;
+    } else if (ttsResult && typeof ttsResult === 'object' && 'audio' in ttsResult) {
+      const audio = (ttsResult as { audio: Uint8Array }).audio;
+      audioBytes = audio.buffer as ArrayBuffer;
     } else {
-      return c.json({ success: false, error: 'TTS generation failed' }, 500);
+      return c.json({ success: false, error: 'TTS generation failed - unexpected response format' }, 500);
     }
 
     // Cache the result for 24 hours
-    await c.env.KV.put(cacheKey, audioBytes.buffer as ArrayBuffer, { expirationTtl: 86400 });
+    await c.env.KV.put(cacheKey, audioBytes, { expirationTtl: 86400 });
 
-    return new Response(audioBytes.buffer as ArrayBuffer, {
+    return new Response(audioBytes, {
       headers: {
-        'Content-Type': 'audio/wav',
+        'Content-Type': 'audio/mpeg',
         'Cache-Control': 'public, max-age=86400',
       },
     });
