@@ -1,6 +1,8 @@
 # API Reference
 
-This document describes all REST API endpoints exposed by the LearnLM backend.
+REST API endpoints for LearnLM.
+
+> Built by **Team The Smurfs** for **SystemHacks:XHacks 2026** — SFU's SSSS Hackathon
 
 **Base URL**: `https://sfu-ai-teacher.email4leit.workers.dev`
 

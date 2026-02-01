@@ -1,10 +1,12 @@
 # Architecture
 
-This document describes the system architecture, data storage, and data flow for LearnLM.
+System architecture, data storage, and data flow for LearnLM.
+
+> Built by **Team The Smurfs** for **SystemHacks:XHacks 2026** — SFU's SSSS Hackathon
 
 ## Overview
 
-LearnLM is built on Cloudflare's developer platform, leveraging Workers for compute, D1 for relational data, KV for caching, Vectorize for semantic search, and Workers AI for inference.
+LearnLM is built on Cloudflare's developer platform, leveraging Workers for compute, D1 for relational data, KV for caching, Vectorize for semantic search, Workers AI for inference, and ElevenLabs for conversational voice AI.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -63,6 +65,16 @@ LearnLM is built on Cloudflare's developer platform, leveraging Workers for comp
 │  │    FLUX      │                                                           │
 │  │   Schnell    │                                                           │
 │  └──────────────┘                                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              ElevenLabs                                     │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                   Conversational AI Voice                             │   │
+│  │                   (Real-time voice sessions)                          │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 

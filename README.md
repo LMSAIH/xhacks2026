@@ -1,19 +1,22 @@
 # LearnLM
 
-An AI-powered tutoring platform with real-time voice conversations. Select a topic, choose an AI tutor character, and learn through natural spoken dialogue.
+An AI-powered tutoring platform where you learn from history's greatest minds. Select a topic, choose an AI tutor modeled after a historical figure, and learn through natural voice conversations.
 
 **Live Demo**: [learn-lm.com](https://learn-lm.com)
 
+> Built by **Team The Smurfs** for **SystemHacks:XHacks 2026** — SFU's SSSS Hackathon
+
 ## Overview
 
-LearnLM enables personalized learning through AI tutors that adapt to your learning style. Features include voice-based tutoring, AI-generated course outlines, a notes editor with intelligent assistance, and integration with SFU course materials.
+LearnLM reimagines education by bringing historical figures back to life as AI tutors. Imagine learning physics from Einstein, programming from Ada Lovelace, or scientific method from Marie Curie. The platform features real-time voice tutoring, AI-generated course outlines, a notes editor with intelligent assistance, and integration with SFU course materials.
 
 ## Key Features
 
-- **Voice Tutoring** - Natural spoken conversations with AI tutors using real-time speech-to-text and text-to-speech
-- **Custom AI Characters** - Learn from historical figures or create custom tutor personas
+- **Historical AI Tutors** - Learn from Einstein, Feynman, Curie, Ada Lovelace, Socrates, and more
+- **Voice Tutoring** - Natural spoken conversations with real-time speech-to-text and text-to-speech
+- **Custom Characters** - Create any tutor persona (real, fictional, or imaginary)
 - **Course Outlines** - AI-generated curriculum with streaming progressive rendering
-- **Notes Editor** - Rich text editor with slash commands and background critique
+- **Notes Editor** - Rich text editor with slash commands for AI assistance
 - **RAG Integration** - Responses grounded in actual course materials
 - **SFU Courses** - Direct integration with 998 Simon Fraser University courses
 
@@ -28,8 +31,8 @@ LearnLM enables personalized learning through AI tutors that adapt to your learn
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/learnlm.git
-cd learnlm
+git clone https://github.com/LMSAIH/xhacks2026.git
+cd xhacks2026
 
 # Install dependencies
 cd backend && npm install
@@ -69,6 +72,7 @@ LearnLM runs entirely on Cloudflare's developer platform:
 | Cache | KV | Session data, rate limits |
 | Search | Vectorize | RAG embeddings |
 | AI | Workers AI | LLM, STT, TTS, embeddings |
+| Voice | ElevenLabs | Conversational AI voice |
 | Frontend | Cloudflare Pages | Static hosting |
 
 For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -82,13 +86,14 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | Deepgram Aura | Workers AI | Text-to-speech (11 voices) |
 | BGE Base EN | Workers AI | Embeddings (768 dim) |
 | FLUX.1 Schnell | Workers AI | Image generation |
+| ElevenLabs | ElevenLabs API | Conversational voice AI |
 
 For complete AI documentation, see [docs/AI.md](docs/AI.md).
 
 ## Project Structure
 
 ```
-learnlm/
+xhacks2026/
 ├── backend/
 │   ├── src/
 │   │   ├── routes/           # API endpoints
@@ -111,7 +116,7 @@ learnlm/
 
 LearnLM includes an MCP server that integrates with AI coding assistants (VS Code, Cursor, Claude Desktop, OpenCode). Get tutoring help, search courses, and critique notes directly from your IDE.
 
-### Quick Setup (Remote - Recommended)
+### Quick Setup (Remote)
 
 Use our hosted MCP server - no local setup required:
 
@@ -128,36 +133,9 @@ Use our hosted MCP server - no local setup required:
 }
 ```
 
-### Local Setup (Self-Hosted)
-
-1. **Build the server:**
-   ```bash
-   cd docker/mcp-server
-   npm install && npm run build
-   ```
-
-2. **Add to VS Code** (settings.json):
-   ```json
-   {
-     "mcp": {
-       "servers": {
-         "learnlm": {
-           "command": "node",
-           "args": ["/path/to/learnlm/docker/mcp-server/dist/index.js"],
-           "env": {
-             "OPENAI_API_KEY": "sk-your-key"
-           }
-         }
-       }
-     }
-   }
-   ```
-
-3. **Use in chat:** `@learnlm search for CMPT 225`
-
 **20 tools available:** Tutoring sessions, course search, prerequisite lookup, document critique, note suggestions, voice selection, and more.
 
-For detailed setup instructions for all IDEs, see [docs/MCP.md](docs/MCP.md).
+For detailed setup instructions, see [docs/MCP.md](docs/MCP.md).
 
 ## Documentation
 
@@ -167,7 +145,7 @@ For detailed setup instructions for all IDEs, see [docs/MCP.md](docs/MCP.md).
 | [API.md](docs/API.md) | REST API endpoint reference |
 | [MCP.md](docs/MCP.md) | MCP server setup and tools |
 | [AI.md](docs/AI.md) | AI models and configuration |
-| [FEATURES.md](docs/FEATURES.md) | Feature descriptions and roadmap |
+| [FEATURES.md](docs/FEATURES.md) | Feature descriptions |
 
 ## API Reference
 
@@ -207,8 +185,8 @@ npx wrangler pages deploy dist
 
 ### Environment Variables
 
-**Backend** (set in Cloudflare dashboard or wrangler.jsonc):
-- Bindings: `DB`, `KV`, `VECTORIZE`, `AI`, `VOICE_SESSION`, `EDITOR_VOICE`
+**Backend** (set via `wrangler secret put`):
+- `ELEVENLABS_API_KEY` - ElevenLabs API key for voice
 
 **Frontend** (.env):
 ```
@@ -235,13 +213,11 @@ npm run build    # Build for production
 npm run preview  # Preview production build
 ```
 
-## Contributing
+## Team
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/name`)
-3. Commit changes (`git commit -am 'Add feature'`)
-4. Push to branch (`git push origin feature/name`)
-5. Open a Pull Request
+**The Smurfs** - SystemHacks:XHacks 2026
+
+Built at Simon Fraser University's SSSS (Software Systems Student Society) Hackathon.
 
 ## License
 

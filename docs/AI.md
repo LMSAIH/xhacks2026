@@ -1,10 +1,12 @@
 # AI Models
 
-This document describes all AI models used in LearnLM, their purposes, and configuration.
+AI models and configuration for LearnLM.
+
+> Built by **Team The Smurfs** for **SystemHacks:XHacks 2026** — SFU's SSSS Hackathon
 
 ## Overview
 
-LearnLM uses Cloudflare Workers AI for all inference in the main application, with optional OpenAI integration in the MCP server for higher-quality responses.
+LearnLM uses Cloudflare Workers AI for inference, ElevenLabs for conversational voice AI, and optional OpenAI integration in the MCP server for higher-quality responses.
 
 ## Model Summary
 
@@ -13,6 +15,7 @@ LearnLM uses Cloudflare Workers AI for all inference in the main application, wi
 | LLM | Llama 3.1 8B Instruct | Cloudflare Workers AI | Text generation, tutoring, analysis |
 | STT | Whisper Large v3 Turbo | Cloudflare (Deepgram) | Speech-to-text transcription |
 | TTS | Deepgram Aura | Cloudflare Workers AI | Text-to-speech synthesis |
+| Voice | Conversational AI | ElevenLabs | Real-time voice tutoring sessions |
 | Embeddings | BGE Base EN v1.5 | Cloudflare Workers AI | Semantic search, RAG |
 | Image | FLUX.1 Schnell | Cloudflare Workers AI | Expert portrait generation |
 | LLM (MCP) | GPT-4o | OpenAI | High-quality tutoring (MCP only) |
@@ -157,6 +160,33 @@ const audio = await env.AI.run('@cf/deepgram/aura-1', {
 - Output format: PCM audio
 - Natural prosody and intonation
 - Supports SSML for fine control
+
+---
+
+## Conversational Voice AI
+
+### ElevenLabs Conversational AI
+
+**Provider**: ElevenLabs
+
+Real-time conversational voice AI for interactive tutoring sessions.
+
+**Use Cases**
+- Voice tutoring sessions
+- Interactive Q&A with historical tutors
+- Natural conversation flow with interruption support
+
+**Configuration**
+Requires `ELEVENLABS_API_KEY` environment secret:
+```bash
+cd backend && npx wrangler secret put ELEVENLABS_API_KEY
+```
+
+**Features**
+- Low-latency real-time voice
+- Natural conversation with turn-taking
+- Customizable agent personalities
+- WebSocket-based streaming
 
 ---
 

@@ -1,6 +1,8 @@
 # MCP Server
 
-This document describes the Model Context Protocol (MCP) server that enables AI-powered tutoring tools for IDE and agent integration.
+Model Context Protocol (MCP) server for AI-powered tutoring tools and IDE integration.
+
+> Built by **Team The Smurfs** for **SystemHacks:XHacks 2026** — SFU's SSSS Hackathon
 
 ## Overview
 

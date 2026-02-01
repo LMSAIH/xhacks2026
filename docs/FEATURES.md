@@ -1,31 +1,31 @@
 # Features
 
-This document describes the key features of LearnLM and what makes the project stand out.
+LearnLM brings historical figures back to life as AI tutors. This document describes the platform's key features.
 
 ## Core Features
 
-### 1. AI Tutor Characters
+### 1. Historical AI Tutors
 
-Learn from AI tutors inspired by historical figures or create custom characters.
+Learn from AI tutors inspired by history's greatest minds.
 
-**Historical Figures**
-- Ada Lovelace (analytical, methodical approach)
-- Albert Einstein (intuitive, thought experiment style)
-- Richard Feynman (playful, first-principles thinking)
-- Marie Curie (rigorous, experimental focus)
-- Socrates (questioning, Socratic method)
-- Carl Sagan (wonder-inspiring, accessible explanations)
+**Available Tutors**
+- **Albert Einstein** - Intuitive explanations, thought experiments
+- **Ada Lovelace** - Analytical, methodical programming instruction
+- **Richard Feynman** - Playful, first-principles thinking
+- **Marie Curie** - Rigorous experimental focus
+- **Socrates** - Questioning, Socratic method
+- **Carl Sagan** - Wonder-inspiring, accessible science
 
 **Custom Characters**
 - Enter any description (real, fictional, or imaginary)
 - AI generates personality, teaching style, and portrait
-- Examples: SpongeBob, Gordon Ramsay, a wise wizard, your grandmother
+- Examples: SpongeBob, Gordon Ramsay, a wise wizard
 
-**Implementation Highlights**
-- AI-generated expert profiles based on topic relevance
-- Unique teaching styles influence response generation
-- Dynamic portrait generation with FLUX.1 Schnell
-- Character context maintained throughout session
+**How It Works**
+- AI generates expert profiles based on topic relevance
+- Each tutor has a unique teaching style that influences responses
+- Portraits generated dynamically with FLUX.1 Schnell
+- Character context maintained throughout the session
 
 ### 2. Real-Time Voice Tutoring
 
@@ -35,14 +35,14 @@ Natural voice conversations with AI tutors using WebSocket connections.
 - Speak naturally and receive spoken responses
 - Low-latency audio streaming
 - Interrupt the tutor mid-response (spacebar)
-- Multiple voice options (11 Deepgram Aura voices)
+- 11 voice options (Deepgram Aura voices)
 - Conversation context maintained across turns
 
-**Technical Implementation**
-- WebSocket connections via Cloudflare Durable Objects
+**Technical Stack**
+- WebSocket via Cloudflare Durable Objects
 - Speech-to-text: Whisper Large v3 Turbo
 - Text-to-speech: Deepgram Aura
-- Stateful sessions with conversation history
+- ElevenLabs Conversational AI integration
 - RAG integration for course-specific knowledge
 
 ### 3. Streaming Course Outlines
@@ -71,21 +71,22 @@ Rich text editor with integrated AI tools for learning support.
 - BlockNote-based rich text editing
 - Markdown support
 - Code blocks with syntax highlighting
-- Mathematical formula rendering
-
-**AI Assistance**
-- Slash commands for quick actions
-- Background critique (debounced, non-intrusive)
-- Context-aware suggestions based on current section
-- Integration with course outline
+- Mathematical formula rendering (LaTeX)
 
 **Slash Commands**
 | Command | Action |
 |---------|--------|
-| `/ask <question>` | Ask the tutor a question |
-| `/explain <concept>` | Get detailed explanation |
-| `/formulas` | Extract and format formulas |
-| `/suggest` | Get improvement suggestions |
+| `/ask` | Ask the tutor a question |
+| `/explain` | Get detailed explanation of a concept |
+| `/formulas` | Extract and format formulas for current section |
+| `/suggest` | Get improvement suggestions for your notes |
+| `/critique` | Get AI critique of your notes |
+
+**AI Blocks**
+- Responses appear inline as dismissible blocks
+- Formula blocks with LaTeX rendering
+- "Add to notes" action to incorporate AI suggestions
+- Dismiss (X) button to remove any AI block
 
 ### 5. Background Notes Critique
 
@@ -105,19 +106,18 @@ Continuous, non-intrusive feedback on notes as you write.
 
 ### 6. SFU Course Integration
 
-Direct integration with Simon Fraser University course catalog.
+Direct integration with Simon Fraser University's course catalog.
 
 **Features**
-- 998 courses from Spring 2025 term
+- 998 courses from current term
 - Search by course code or title
 - Full course details (description, prerequisites, instructors)
 - Term and instructor information
-- Automatic sync from SFU API
+- RAG-powered responses grounded in course materials
 
 **Course Data**
 - Course code and title
-- Description
-- Prerequisites and corequisites
+- Description and prerequisites
 - Units and designation
 - Delivery method
 - Current term instructors
@@ -138,7 +138,7 @@ Optimized onboarding with parallel data fetching.
 - Image generation runs in background
 - By step 3, outline is usually ready
 
-### 8. Multiple Tutor Personas
+### 8. Tutor Personas
 
 Different teaching approaches for different learning styles.
 
@@ -146,12 +146,12 @@ Different teaching approaches for different learning styles.
 |---------|----------|
 | Socratic | Questions to guide discovery |
 | Professor | Structured lectures with theory |
-| Mentor | Encouraging, step-by-step |
+| Mentor | Encouraging, step-by-step guidance |
 | Standard | Balanced, adaptive style |
 
 ### 9. Voice Selection
 
-11 distinct voices for personalized learning experience.
+11 distinct voices for personalized learning.
 
 **Female Voices**
 - Asteria (Professional)
@@ -175,13 +175,13 @@ Retrieval-Augmented Generation for accurate, course-specific responses.
 **How It Works**
 1. Course content is chunked and embedded
 2. User questions trigger semantic search
-3. Relevant chunks are retrieved from Vectorize
-4. Context is injected into LLM prompt
-5. Responses are grounded in actual course material
+3. Relevant chunks retrieved from Vectorize
+4. Context injected into LLM prompt
+5. Responses grounded in actual course material
 
 ---
 
-## Technical Differentiators
+## Technical Highlights
 
 ### Fully Serverless Architecture
 
@@ -202,7 +202,7 @@ Retrieval-Augmented Generation for accurate, course-specific responses.
 ### Cost-Efficient AI
 
 - Workers AI included in $5/month plan
-- No per-inference costs
+- No per-inference costs for most operations
 - Efficient model selection (Llama 3.1 8B)
 - Smart caching reduces redundant inference
 
@@ -217,63 +217,20 @@ Retrieval-Augmented Generation for accurate, course-specific responses.
 
 - Standard protocol for IDE/agent integration
 - Enables AI coding assistants to use tutoring tools
-- Extensible tool system
+- 20 tools available
 - Separate from main application (optional)
-
----
-
-## Feature Roadmap
-
-### Planned Features
-
-**Learning Progress Tracking**
-- Track topics covered per course
-- Mastery score calculation
-- Learning analytics dashboard
-- Spaced repetition suggestions
-
-**Collaborative Learning**
-- Share notes with peers
-- Group tutoring sessions
-- Discussion threads per topic
-
-**Content Export**
-- Export notes as PDF
-- Export as Markdown
-- Anki flashcard generation
-- Study guide compilation
-
-**Mobile Support**
-- Progressive Web App
-- Offline note access
-- Voice tutoring on mobile
-
-**Advanced RAG**
-- User-uploaded materials
-- Lecture slide integration
-- Textbook content indexing
-- Cross-course knowledge linking
 
 ---
 
 ## What Makes LearnLM Stand Out
 
-1. **Personalized AI Tutors** - Not just an AI chatbot, but a character with personality and teaching style
-
-2. **Voice-First Interaction** - Natural spoken conversation, not just text chat
-
-3. **Course-Aware Context** - RAG integration means responses are grounded in actual course material
-
-4. **Real-Time Streaming** - Progressive rendering for immediate feedback, no waiting for complete responses
-
+1. **Historical AI Tutors** - Learn from Einstein, Curie, Feynman, and more
+2. **Voice-First Interaction** - Natural spoken conversation, not just text
+3. **Course-Aware Context** - RAG ensures responses are grounded in course material
+4. **Real-Time Streaming** - Progressive rendering, no waiting for complete responses
 5. **Integrated Learning Environment** - Notes, tutoring, and course content in one place
-
 6. **Edge Performance** - Global low latency with Cloudflare's edge network
-
-7. **Open Architecture** - MCP integration enables extensibility and IDE integration
-
-8. **SFU Integration** - Direct course catalog integration with real academic content
-
-9. **No Account Required** - Start learning immediately, no sign-up friction
-
-10. **Cost-Efficient** - Runs entirely on Cloudflare's affordable infrastructure
+7. **Open Architecture** - MCP integration for IDE extensibility
+8. **SFU Integration** - Real academic content from 998 courses
+9. **No Account Required** - Start learning immediately
+10. **Hackathon Quality** - Built for SystemHacks:XHacks 2026 by Team The Smurfs
