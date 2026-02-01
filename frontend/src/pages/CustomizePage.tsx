@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { PageLayout } from "@/components/layout";
 import {
@@ -25,6 +25,9 @@ export default function CustomizePage() {
   const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
   const [customCharacterDescription, setCustomCharacterDescription] = useState("");
   const [generatedCustomCharacter, setGeneratedCustomCharacter] = useState<Character | null>(null);
+  
+  // Track which character we've regenerated the outline for to prevent duplicate calls
+  const regeneratedForCharacterRef = useRef<string | null>(null);
 
   const displayTopic = topic || courseName || "Custom Topic";
   
@@ -42,10 +45,17 @@ export default function CustomizePage() {
   }, [displayTopic]);
   
   // Regenerate outline when user selects a character (to personalize it)
+  // Only regenerate once per character to prevent race conditions
   useEffect(() => {
-    if (currentStep === "review" && selectedCharacterId && pipeline.outline) {
+    if (
+      currentStep === "review" && 
+      selectedCharacterId && 
+      pipeline.outline &&
+      regeneratedForCharacterRef.current !== selectedCharacterId
+    ) {
       const character = pipeline.experts.find(e => e.id === selectedCharacterId);
       if (character) {
+        regeneratedForCharacterRef.current = selectedCharacterId;
         // Regenerate with character info for personalized outline
         pipeline.regenerateOutline({
           id: character.id,
@@ -54,7 +64,7 @@ export default function CustomizePage() {
         });
       }
     }
-  }, [currentStep, selectedCharacterId]);
+  }, [currentStep, selectedCharacterId, pipeline.outline, pipeline.experts, pipeline.regenerateOutline]);
 
   // Convert pipeline experts to Character format for the component
   const aiCharacters: Character[] = useMemo(() => {

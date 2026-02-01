@@ -229,9 +229,79 @@ export async function updateCoursesFromAPI(env: Env, term: string): Promise<{
   }
 }
 
+// Popular SFU courses as seed data when database is empty
+const SEED_COURSES = [
+  { name: 'CMPT 120', title: 'Introduction to Computing Science and Programming I', description: 'An introduction to computing science and computer programming, suitable for students with little or no programming background.', units: '3', prerequisites: '', designation: 'Quantitative' },
+  { name: 'CMPT 125', title: 'Introduction to Computing Science and Programming II', description: 'A continuation of CMPT 120. Introduces more advanced programming concepts and basic data structures.', units: '3', prerequisites: 'CMPT 120', designation: 'Quantitative' },
+  { name: 'CMPT 225', title: 'Data Structures and Programming', description: 'Introduction to a variety of practical and important data structures and their implementations: stacks, queues, hash tables, binary search trees, heaps.', units: '3', prerequisites: 'CMPT 125 or CMPT 129', designation: 'Quantitative' },
+  { name: 'CMPT 276', title: 'Introduction to Software Engineering', description: 'An overview of various techniques used for software development and for the management of software development projects.', units: '3', prerequisites: 'CMPT 225', designation: '' },
+  { name: 'CMPT 295', title: 'Introduction to Computer Systems', description: 'Introduction to the organization of modern digital computers: logic and data representation, computer arithmetic and architecture.', units: '3', prerequisites: 'CMPT 125 or CMPT 129', designation: '' },
+  { name: 'CMPT 300', title: 'Operating Systems I', description: 'An introduction to operating systems. Topics include concurrent processes, inter-process communication, scheduling, memory management.', units: '3', prerequisites: 'CMPT 225 and (CMPT 295 or ENSC 254)', designation: '' },
+  { name: 'CMPT 354', title: 'Database Systems I', description: 'Logical representations of data by relational, network, hierarchical models. Relational algebra. Introduction to SQL.', units: '3', prerequisites: 'CMPT 225', designation: '' },
+  { name: 'MATH 150', title: 'Calculus I with Review', description: 'Designed for students specializing in mathematics, physics, chemistry, computing science and engineering. Differential calculus.', units: '4', prerequisites: 'Pre-Calculus 12 or equivalent', designation: 'Quantitative' },
+  { name: 'MATH 151', title: 'Calculus I', description: 'Limits, derivatives, Mean Value Theorem, applications of derivatives, integrals, Fundamental Theorem of Calculus.', units: '3', prerequisites: 'Pre-Calculus 12 with grade A or BC Principles of Math 12', designation: 'Quantitative' },
+  { name: 'MATH 152', title: 'Calculus II', description: 'Techniques of integration, applications of integration, infinite series, Taylor and Maclaurin series.', units: '3', prerequisites: 'MATH 150 or MATH 151', designation: 'Quantitative' },
+  { name: 'MATH 232', title: 'Applied Linear Algebra', description: 'Linear equations, matrices, determinants. Introduction to vector spaces. Eigenvalues and eigenvectors.', units: '3', prerequisites: 'MATH 150 or MATH 151', designation: 'Quantitative' },
+  { name: 'STAT 270', title: 'Introduction to Probability and Statistics', description: 'Basic laws of probability, sample distributions. Introduction to statistical inference.', units: '3', prerequisites: 'MATH 152', designation: 'Quantitative' },
+  { name: 'PHYS 120', title: 'Modern Physics and Mechanics', description: 'Special relativity, kinematics, dynamics, momentum, energy, angular momentum, rotation.', units: '3', prerequisites: 'BC Physics 12 or equivalent', designation: 'Science' },
+  { name: 'PHYS 121', title: 'Optics, Electricity and Magnetism', description: 'Waves and optics; electricity and magnetism; Maxwell equations and electromagnetic waves.', units: '3', prerequisites: 'PHYS 120', designation: 'Science' },
+  { name: 'CHEM 121', title: 'General Chemistry I', description: 'Atomic and molecular structure; chemical bonding; thermochemistry; elements; gases; liquids, solids.', units: '4', prerequisites: 'Chemistry 12', designation: 'Science' },
+  { name: 'BISC 101', title: 'General Biology', description: 'Introduction to the study of life focusing on the cell, molecular basis of life, genetics and evolution.', units: '3', prerequisites: 'None', designation: 'Science' },
+  { name: 'ECON 103', title: 'Principles of Microeconomics', description: 'Analysis of individual decision-making and markets. Supply and demand, consumer theory, production.', units: '3', prerequisites: 'None', designation: 'Social Science' },
+  { name: 'ECON 105', title: 'Principles of Macroeconomics', description: 'Analysis of national income, employment, inflation. Monetary and fiscal policy.', units: '3', prerequisites: 'None', designation: 'Social Science' },
+  { name: 'BUS 237', title: 'Introduction to Business Technology Management', description: 'Introduction to current technologies and their business applications. E-commerce, networks, databases.', units: '3', prerequisites: 'None', designation: '' },
+  { name: 'BUS 251', title: 'Financial Accounting I', description: 'Introduction to accounting: assets, liabilities, equity, revenue, expenses. Financial statements.', units: '3', prerequisites: 'None', designation: '' },
+  { name: 'PSYC 100', title: 'Introduction to Psychology I', description: 'A survey of major topics in psychology including history, research methods, biological bases of behavior.', units: '3', prerequisites: 'None', designation: 'Social Science' },
+  { name: 'ENGL 101', title: 'Introduction to Fiction', description: 'An introduction to reading prose fiction: the novel and short story.', units: '3', prerequisites: 'None', designation: 'Humanities' },
+  { name: 'PHIL 100', title: 'Knowledge and Reality', description: 'Introduction to philosophy through study of selected problems concerning knowledge and reality.', units: '3', prerequisites: 'None', designation: 'Humanities' },
+  { name: 'HIST 101', title: 'Canada to Confederation', description: 'Canadian history to 1867: colonization, colonial conflict, British North America.', units: '3', prerequisites: 'None', designation: 'Humanities' },
+];
+
+async function seedCoursesIfEmpty(env: Env): Promise<boolean> {
+  try {
+    // Check if database has any courses
+    const countResult = await env.DB.prepare('SELECT COUNT(*) as count FROM sfu_courses').first<{ count: number }>();
+    
+    if (countResult && countResult.count > 0) {
+      return false; // Already has data
+    }
+
+    console.log('Database empty, seeding with popular courses...');
+
+    // Insert seed courses
+    for (const course of SEED_COURSES) {
+      try {
+        await env.DB.prepare(`
+          INSERT INTO sfu_courses (name, title, description, units, prerequisites, designation, term)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          course.name,
+          course.title,
+          course.description,
+          course.units,
+          course.prerequisites,
+          course.designation,
+          'Seed Data'
+        ).run();
+      } catch (e) {
+        console.error(`Failed to insert seed course ${course.name}:`, e);
+      }
+    }
+
+    console.log(`Seeded ${SEED_COURSES.length} courses`);
+    return true;
+  } catch (e) {
+    console.error('Error checking/seeding courses:', e);
+    return false;
+  }
+}
+
 export async function getCourses(env: Env, filters?: {
   name?: string;
 }): Promise<any[]> {
+  // Seed database with popular courses if empty
+  await seedCoursesIfEmpty(env);
+
   let query = 'SELECT * FROM sfu_courses WHERE 1=1';
   const params: string[] = [];
 
@@ -239,6 +309,8 @@ export async function getCourses(env: Env, filters?: {
     query += ' AND name LIKE ?';
     params.push(`%${filters.name}%`);
   }
+
+  query += ' ORDER BY name ASC LIMIT 100';
 
   const result = await env.DB.prepare(query).bind(...params).all();
   return result.results || [];

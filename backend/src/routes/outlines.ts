@@ -36,6 +36,34 @@ interface AIResponse {
 
 const outlineRoutes = new Hono<{ Bindings: Env }>();
 
+// Helper to run AI with timeout
+async function runAIWithTimeout<T>(
+  aiCall: () => Promise<T>,
+  timeoutMs: number = 15000
+): Promise<T> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('AI request timed out')), timeoutMs);
+  });
+  return Promise.race([aiCall(), timeoutPromise]);
+}
+
+// Generate fallback subsections based on section title
+function generateFallbackChildren(sectionNumber: string, sectionTitle: string): OutlineItem[] {
+  const topics = [
+    { suffix: 'Introduction', desc: 'Getting started with the basics' },
+    { suffix: 'Key Concepts', desc: 'Understanding the fundamental ideas' },
+    { suffix: 'Examples', desc: 'Practical examples and demonstrations' },
+  ];
+  
+  return topics.map((topic, idx) => ({
+    id: `${sectionNumber}.${idx + 1}`,
+    number: `${sectionNumber}.${idx + 1}`,
+    title: `${sectionTitle} - ${topic.suffix}`,
+    description: topic.desc,
+    duration: '5 min',
+  }));
+}
+
 /**
  * Generate a course outline using AI based on topic and optional character
  * POST /api/outlines/generate
@@ -106,21 +134,31 @@ Make the outline:
 3. Include hands-on exercises or activities where appropriate
 4. ${character?.name ? `Reflect ${character.name}'s unique teaching perspective` : 'Be engaging and accessible'}`;
 
-    // @ts-expect-error - Model name is valid but not in local type definitions
-    const llmResponse = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert curriculum designer who creates structured, engaging course outlines. Always respond with ONLY valid JSON, no markdown, no code blocks.',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      max_tokens: 4096,
-      temperature: 0.5,
-    }) as AIResponse;
+    // Generate outline with timeout protection
+    let llmResponse: AIResponse;
+    try {
+      llmResponse = await runAIWithTimeout(
+        // @ts-expect-error - Model name is valid but not in local type definitions
+        () => c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an expert curriculum designer who creates structured, engaging course outlines. Always respond with ONLY valid JSON, no markdown, no code blocks.',
+            },
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+          max_tokens: 4096,
+          temperature: 0.5,
+        }),
+        25000 // 25 second timeout for full outline
+      ) as AIResponse;
+    } catch (timeoutError) {
+      console.error('Outline generation timed out');
+      return c.json({ success: false, error: 'Outline generation timed out. Please try again.' }, 504);
+    }
 
     const content = llmResponse?.response;
     if (!content) {
@@ -295,14 +333,24 @@ Return ONLY valid JSON with 5-7 section titles:
   "difficulty": "${difficulty}"
 }`;
 
-      // @ts-expect-error - Model name is valid but not in local type definitions
-      const structureResponse = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-        messages: [
-          { role: 'system', content: 'You are a curriculum designer. Respond with ONLY valid JSON.' },
-          { role: 'user', content: structurePrompt },
-        ],
-        max_tokens: 512,
-      }) as AIResponse;
+      // First, get the overall structure (just titles) - with timeout
+      let structureResponse: AIResponse;
+      try {
+        structureResponse = await runAIWithTimeout(
+          // @ts-expect-error - Model name is valid but not in local type definitions
+          () => c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+            messages: [
+              { role: 'system', content: 'You are a curriculum designer. Respond with ONLY valid JSON.' },
+              { role: 'user', content: structurePrompt },
+            ],
+            max_tokens: 512,
+          }),
+          10000 // 10 second timeout for structure
+        ) as AIResponse;
+      } catch (timeoutError) {
+        console.warn('Structure generation timed out, using fallback');
+        structureResponse = { response: '{}' };
+      }
 
       let structure: {
         sectionTitles: string[];
@@ -365,14 +413,23 @@ Return ONLY valid JSON:
 
 Include 2-4 subsections with practical content.`;
 
-        // @ts-expect-error - Model name is valid but not in local type definitions
-        const sectionResponse = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-          messages: [
-            { role: 'system', content: 'You are a curriculum designer. Respond with ONLY valid JSON.' },
-            { role: 'user', content: sectionPrompt },
-          ],
-          max_tokens: 1024,
-        }) as AIResponse;
+        let sectionResponse: AIResponse;
+        try {
+          sectionResponse = await runAIWithTimeout(
+            // @ts-expect-error - Model name is valid but not in local type definitions
+            () => c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+              messages: [
+                { role: 'system', content: 'You are a curriculum designer. Respond with ONLY valid JSON.' },
+                { role: 'user', content: sectionPrompt },
+              ],
+              max_tokens: 1024,
+            }),
+            12000 // 12 second timeout per section
+          ) as AIResponse;
+        } catch (timeoutError) {
+          console.warn(`Section ${i + 1} generation timed out, using fallback`);
+          sectionResponse = { response: '{}' };
+        }
 
         try {
           let content = sectionResponse.response || '{}';
@@ -392,14 +449,14 @@ Include 2-4 subsections with practical content.`;
             }),
           });
         } catch {
-          // Fallback section
+          // Fallback section with generated children
           const fallbackSection: OutlineItem = {
             id: String(i + 1),
             number: String(i + 1),
             title: sectionTitle,
-            description: `Content about ${sectionTitle}`,
+            description: `Learn about ${sectionTitle.toLowerCase()} and its applications`,
             duration: '15 min',
-            children: [],
+            children: generateFallbackChildren(String(i + 1), sectionTitle),
           };
           sections.push(fallbackSection);
 
