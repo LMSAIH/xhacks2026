@@ -10,6 +10,8 @@ export interface Env {
   VECTORIZE: VectorizeIndex;
   VOICE_SESSION: DurableObjectNamespace;
   OPENAI_API_KEY?: string;
+  ELEVENLABS_API_KEY?: string;
+  MCP_SERVER_ID?: string;
   SFU_API_BASE_URL?: string;
 }
 
