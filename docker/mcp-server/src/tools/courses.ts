@@ -2,7 +2,9 @@ import * as db from '../db/sqlite.js';
 import { searchCourseContent, getCourseOutline } from '../rag/cloudflare.js';
 
 // Backend API URL - uses production by default, can be overridden
-const BACKEND_API_URL = process.env.BACKEND_API_URL || 'https://sfu-ai-teacher.email4leit.workers.dev';
+const rawBackendUrl = process.env.BACKEND_API_URL || 'https://sfu-ai-teacher.email4leit.workers.dev';
+// Ensure URL has protocol
+const BACKEND_API_URL = rawBackendUrl.startsWith('http') ? rawBackendUrl : `https://${rawBackendUrl}`;
 
 // ============================================================================
 // COURSE CODE NORMALIZATION (matches backend logic)
