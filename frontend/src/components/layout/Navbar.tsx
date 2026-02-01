@@ -7,16 +7,11 @@ export function Navbar() {
   return (
     <header className="w-full  py-4 border-b border-border bg-background/95 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        {/* Left side - Logo & Brand */}
+        {/* Left side - Brand */}
         <button
           onClick={() => navigate("/")}
-          className="hover:opacity-80 transition-opacity flex items-center gap-3"
+          className="hover:opacity-80 transition-opacity"
         >
-          <img 
-            src="/logo.svg" 
-            alt="LearnLM" 
-            className="h-6 w-auto dark:invert"
-          />
           <span className="text-xl font-bold tracking-tight">LearnLM</span>
         </button>
 

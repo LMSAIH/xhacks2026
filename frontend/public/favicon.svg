@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Favicon - simplified M shape that works at small sizes -->
-  <rect width="64" height="64" fill="#000000"/>
-  <!-- Stylized LM mark in white -->
-  <polygon fill="#FFFFFF" points="8,52 8,54 14,54 22,14 22,12 16,12" />
-  <polygon fill="#FFFFFF" points="18,52 18,54 24,54 32,14 32,12 26,12" />
-  <polygon fill="#FFFFFF" points="28,54 34,54 44,18 54,54 58,54 58,52 56,52 46,12 42,12 32,48 32,52" />
-</svg>
