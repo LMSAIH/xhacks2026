@@ -34,7 +34,10 @@ export function CustomTopicPage() {
       <div className="max-w-xl mx-auto px-6 py-8 animate-fade-in-up">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl md:text-3xl font-semibold mb-2">
+          <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">
+            Custom Topic
+          </p>
+          <h1 className="text-2xl md:text-3xl font-display font-semibold mb-2">
             What do you want to learn?
           </h1>
           <p className="text-muted-foreground">
@@ -45,7 +48,7 @@ export function CustomTopicPage() {
         {/* Topic Input */}
         <div className="space-y-5 mb-8">
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label className="block text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">
               Topic
             </label>
             <input
@@ -53,7 +56,7 @@ export function CustomTopicPage() {
               placeholder="e.g., Quantum Physics, Data Structures, Spanish..."
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              className="w-full px-4 py-3 bg-card border border-border focus:outline-none focus:border-foreground transition-colors text-lg"
+              className="w-full px-4 py-3 bg-card border-2 border-border focus:outline-none focus:border-foreground transition-colors text-lg"
             />
           </div>
 
@@ -61,23 +64,29 @@ export function CustomTopicPage() {
 
         {/* Suggestions */}
         <div className="mb-8">
-          <div className="text-sm text-muted-foreground mb-3">
-            Or pick a popular topic:
+          <div className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">
+            Or pick a popular topic
           </div>
           <div className="grid grid-cols-2 gap-3">
             {SUGGESTED_TOPICS.map((suggestion) => (
               <button
                 key={suggestion.name}
                 onClick={() => handleSuggestionClick(suggestion.name)}
-                className={`p-4 text-left border transition-all ${
+                className={`relative p-4 text-left border-2 transition-all ${
                   topic === suggestion.name
                     ? "bg-foreground text-background border-foreground"
                     : "bg-card border-border hover:border-foreground"
                 }`}
               >
-                <span className="font-medium block">{suggestion.name}</span>
+                {/* Corner brackets */}
+                <span className={`absolute top-1 left-1 text-[10px] font-mono ${topic === suggestion.name ? "text-background/40" : "text-muted-foreground/40"}`}>┌</span>
+                <span className={`absolute top-1 right-1 text-[10px] font-mono ${topic === suggestion.name ? "text-background/40" : "text-muted-foreground/40"}`}>┐</span>
+                <span className={`absolute bottom-1 left-1 text-[10px] font-mono ${topic === suggestion.name ? "text-background/40" : "text-muted-foreground/40"}`}>└</span>
+                <span className={`absolute bottom-1 right-1 text-[10px] font-mono ${topic === suggestion.name ? "text-background/40" : "text-muted-foreground/40"}`}>┘</span>
+                
+                <span className="font-display font-medium block">{suggestion.name}</span>
                 <span
-                  className={`text-sm ${
+                  className={`text-xs font-mono ${
                     topic === suggestion.name
                       ? "text-background/70"
                       : "text-muted-foreground"
@@ -94,9 +103,10 @@ export function CustomTopicPage() {
         <button
           disabled={!topic.trim()}
           onClick={handleStartLearning}
-          className="w-full py-4 bg-foreground text-background font-medium text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-colors"
+          className="group w-full py-4 bg-foreground text-background font-display font-medium text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-colors flex items-center justify-center gap-2"
         >
-          Continue to Tutor Selection →
+          Continue to Tutor Selection
+          <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
         </button>
       </div>
     </PageLayout>

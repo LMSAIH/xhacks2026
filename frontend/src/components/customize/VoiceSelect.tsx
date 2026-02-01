@@ -141,19 +141,21 @@ export function VoiceSelect({
 
       {/* Navigation */}
       <BlurFade delay={0.5}>
-        <div className="flex justify-between items-center border-t border-border pt-4 -mx-6 px-6 -mb-6 pb-6 bg-muted/20">
+        <div className="flex justify-between items-center border-t-2 border-border pt-4 -mx-6 px-6 -mb-6 pb-6 bg-muted/20">
           <button
             onClick={onBack}
-            className="px-4 py-2.5 border border-border text-sm hover:border-foreground transition-colors"
+            className="group px-5 py-3 border-2 border-border text-sm hover:border-foreground transition-all duration-300 inline-flex items-center gap-2"
           >
-            &larr; Back
+            <span className="group-hover:-translate-x-1 transition-transform">←</span>
+            Back
           </button>
           <button
             onClick={onContinue}
             disabled={!selectedId}
-            className="px-6 py-2.5 bg-foreground text-background text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-colors"
+            className="group px-6 py-3 bg-foreground text-background text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-all duration-300 inline-flex items-center gap-2"
           >
-            Continue &rarr;
+            Continue
+            <span className="group-hover:translate-x-1 transition-transform">→</span>
           </button>
         </div>
       </BlurFade>
@@ -179,20 +181,26 @@ function VoiceCard({
   return (
     <button
       onClick={onSelect}
-      className={`w-full text-left p-4 border transition-all ${
+      className={`group w-full text-left p-4 border-2 transition-all duration-300 relative ${
         isSelected
           ? "border-foreground bg-foreground"
           : "border-border hover:border-foreground bg-background"
       }`}
     >
+      {/* Terminal-style corner brackets */}
+      <div className={`absolute top-1 left-1 font-mono text-[10px] transition-colors ${isSelected ? 'text-background/30' : 'text-border'}`}>┌</div>
+      <div className={`absolute top-1 right-1 font-mono text-[10px] transition-colors ${isSelected ? 'text-background/30' : 'text-border'}`}>┐</div>
+      <div className={`absolute bottom-1 left-1 font-mono text-[10px] transition-colors ${isSelected ? 'text-background/30' : 'text-border'}`}>└</div>
+      <div className={`absolute bottom-1 right-1 font-mono text-[10px] transition-colors ${isSelected ? 'text-background/30' : 'text-border'}`}>┘</div>
+
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="mb-1">
-            <span className={`font-semibold ${isSelected ? "text-background" : "text-foreground"}`}>
+            <span className={`font-display font-semibold ${isSelected ? "text-background" : "text-foreground"}`}>
               {voice.name}
             </span>
           </div>
-          <div className={`text-xs mb-1 ${isSelected ? "text-background/70" : "text-muted-foreground"}`}>
+          <div className={`text-xs font-mono mb-1 ${isSelected ? "text-background/70" : "text-muted-foreground"}`}>
             {voice.description}
           </div>
           <p className={`text-xs line-clamp-2 ${isSelected ? "text-background/80" : "text-foreground/80"}`}>
@@ -203,7 +211,7 @@ function VoiceCard({
             {voice.bestFor.slice(0, 2).map((tag) => (
               <span
                 key={tag}
-                className={`text-[10px] px-1.5 py-0.5 rounded ${
+                className={`text-[10px] font-mono px-1.5 py-0.5 ${
                   isSelected
                     ? "bg-background/10 text-background/70"
                     : "bg-muted text-muted-foreground"
@@ -222,10 +230,10 @@ function VoiceCard({
             onPlayPreview();
           }}
           disabled={isLoading}
-          className={`w-8 h-8 flex items-center justify-center border transition-colors shrink-0 ${
+          className={`w-10 h-10 flex items-center justify-center border-2 transition-all duration-300 shrink-0 ${
             isSelected
               ? "border-background/30 text-background hover:bg-background/10"
-              : "border-border text-foreground hover:bg-muted"
+              : "border-border text-foreground hover:border-foreground hover:bg-muted"
           } ${isLoading ? "opacity-50 cursor-wait" : ""}`}
           aria-label={`Play ${voice.name} voice preview`}
         >
@@ -240,8 +248,8 @@ function VoiceCard({
       </div>
 
       {isSelected && (
-        <div className="mt-2 pt-2 border-t border-background/20 text-xs text-background/80">
-          Selected
+        <div className="mt-3 pt-3 border-t border-background/20 text-xs font-mono text-background/80">
+          ✓ Selected
         </div>
       )}
     </button>

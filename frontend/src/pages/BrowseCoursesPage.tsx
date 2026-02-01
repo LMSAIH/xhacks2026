@@ -75,7 +75,10 @@ export function BrowseCoursesPage() {
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8 animate-fade-in-up">
-          <h1 className="text-2xl md:text-3xl font-semibold mb-2">
+          <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">
+            Course Catalog
+          </p>
+          <h1 className="text-2xl md:text-3xl font-display font-semibold mb-2">
             Browse SFU Courses
           </h1>
           <p className="text-muted-foreground">
@@ -91,11 +94,11 @@ export function BrowseCoursesPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="flex-1 px-4 py-3 bg-card border border-border focus:outline-none focus:border-foreground transition-colors"
+            className="flex-1 px-4 py-3 bg-card border-2 border-border focus:outline-none focus:border-foreground transition-colors font-mono"
           />
           <button
             onClick={handleSearch}
-            className="px-6 py-3 bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors"
+            className="px-6 py-3 bg-foreground text-background font-display font-medium hover:bg-foreground/90 transition-colors border-2 border-foreground"
           >
             Search
           </button>
@@ -103,8 +106,8 @@ export function BrowseCoursesPage() {
 
         {/* Department Pills */}
         <div className="mb-8">
-          <div className="text-sm text-muted-foreground mb-3">
-            Popular departments:
+          <div className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">
+            Popular departments
           </div>
           <div className="flex flex-wrap gap-2">
             {POPULAR_DEPARTMENTS.map((dept) => (
@@ -114,7 +117,7 @@ export function BrowseCoursesPage() {
                   setSelectedDept(dept);
                   setSearchQuery("");
                 }}
-                className={`px-4 py-2 text-sm font-medium border transition-all ${
+                className={`px-4 py-2 text-sm font-mono font-medium border-2 transition-all ${
                   selectedDept === dept
                     ? "bg-foreground text-background border-foreground"
                     : "bg-card border-border hover:border-foreground"
@@ -134,21 +137,27 @@ export function BrowseCoursesPage() {
             </div>
           ) : courses.length > 0 ? (
             <div className="space-y-2">
-              <div className="text-sm text-muted-foreground mb-4">
+              <div className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
                 {courses.length} courses found
               </div>
               {courses.map((course) => (
                 <button
                   key={course.id}
                   onClick={() => handleCourseSelect(course)}
-                  className="w-full p-5 text-left border border-border bg-card hover:border-foreground hover:bg-accent/50 transition-all"
+                  className="group relative w-full p-5 text-left border-2 border-border bg-card hover:border-foreground transition-all"
                 >
+                  {/* Corner brackets */}
+                  <span className="absolute top-2 left-2 text-xs font-mono text-muted-foreground/50 group-hover:text-foreground/50 transition-colors">┌</span>
+                  <span className="absolute top-2 right-2 text-xs font-mono text-muted-foreground/50 group-hover:text-foreground/50 transition-colors">┐</span>
+                  <span className="absolute bottom-2 left-2 text-xs font-mono text-muted-foreground/50 group-hover:text-foreground/50 transition-colors">└</span>
+                  <span className="absolute bottom-2 right-2 text-xs font-mono text-muted-foreground/50 group-hover:text-foreground/50 transition-colors">┘</span>
+                  
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-lg mb-1">
+                      <div className="font-mono font-semibold text-lg mb-1">
                         {course.name}
                       </div>
-                      <div className="text-foreground/80 mb-2">
+                      <div className="font-display text-foreground/80 mb-2">
                         {course.title}
                       </div>
                       {course.description && (
@@ -157,7 +166,7 @@ export function BrowseCoursesPage() {
                         </div>
                       )}
                     </div>
-                    <div className="text-sm text-muted-foreground shrink-0">
+                    <div className="text-xs font-mono text-muted-foreground shrink-0 border border-border px-2 py-1">
                       {course.units} units
                     </div>
                   </div>

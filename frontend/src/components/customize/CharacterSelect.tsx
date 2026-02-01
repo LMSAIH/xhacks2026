@@ -119,7 +119,7 @@ export function CharacterSelect({
 
       {/* Custom Option */}
       <BlurFade delay={0.4}>
-        <div className="border border-dashed border-border p-5 bg-muted/20 mb-6">
+        <div className="border-2 border-dashed border-border p-5 bg-muted/20 mb-6 relative">
           <div className="text-center mb-3">
             <CardTitle className="mb-1">Want someone different?</CardTitle>
             <HelpText>
@@ -135,7 +135,7 @@ export function CharacterSelect({
                 if (e.target.value) onSelect(null);
               }}
               placeholder="e.g., SpongeBob, Gordon Ramsay, a wise wizard, my grandma..."
-              className="flex-1 px-4 py-3 bg-background border border-border text-sm focus:outline-none focus:border-foreground transition-colors"
+              className="flex-1 px-4 py-3 bg-background border-2 border-border text-sm font-mono focus:outline-none focus:border-foreground transition-colors"
             />
             <button
               onClick={async () => {
@@ -153,7 +153,7 @@ export function CharacterSelect({
                 }
               }}
               disabled={!customDescription.trim() || isGeneratingCustom || !onCustomCharacterGenerated}
-              className="px-4 py-3 bg-foreground text-background text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-colors whitespace-nowrap"
+              className="px-5 py-3 bg-foreground text-background text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-all duration-300 whitespace-nowrap"
             >
               {isGeneratingCustom ? (
                 <>
@@ -186,13 +186,14 @@ export function CharacterSelect({
 
       {/* Continue Button */}
       <BlurFade delay={0.5}>
-        <div className="flex justify-end border-t border-border pt-4 -mx-6 px-6 -mb-6 pb-6 bg-muted/20">
+        <div className="flex justify-end border-t-2 border-border pt-4 -mx-6 px-6 -mb-6 pb-6 bg-muted/20">
           <button
             onClick={onContinue}
             disabled={!canContinue}
-            className="px-6 py-2.5 bg-foreground text-background text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-colors"
+            className="group px-6 py-3 bg-foreground text-background text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-all duration-300 inline-flex items-center gap-2"
           >
-            Continue →
+            Continue 
+            <span className="group-hover:translate-x-1 transition-transform">→</span>
           </button>
         </div>
       </BlurFade>
@@ -235,16 +236,22 @@ function CharacterCard({
 
   return (
     <div
-      className={`w-full text-left p-3 border transition-all ${
+      className={`group w-full text-left p-4 border-2 transition-all duration-300 relative ${
         isSelected
           ? "border-foreground bg-foreground"
           : "border-border hover:border-foreground bg-background"
       }`}
     >
+      {/* Terminal-style corner brackets */}
+      <div className={`absolute top-1 left-1 font-mono text-[10px] transition-colors ${isSelected ? 'text-background/30' : 'text-border'}`}>┌</div>
+      <div className={`absolute top-1 right-1 font-mono text-[10px] transition-colors ${isSelected ? 'text-background/30' : 'text-border'}`}>┐</div>
+      <div className={`absolute bottom-1 left-1 font-mono text-[10px] transition-colors ${isSelected ? 'text-background/30' : 'text-border'}`}>└</div>
+      <div className={`absolute bottom-1 right-1 font-mono text-[10px] transition-colors ${isSelected ? 'text-background/30' : 'text-border'}`}>┘</div>
+
       <button onClick={onSelect} className="w-full text-left">
         <div className="flex gap-3">
           {/* Image */}
-          <div className="w-14 h-14 bg-muted overflow-hidden shrink-0 relative">
+          <div className="w-14 h-14 bg-muted overflow-hidden shrink-0 relative border border-border">
             {isGeneratingImage ? (
               <div className="w-full h-full flex items-center justify-center">
                 <div className="w-5 h-5 border-2 border-foreground/20 border-t-foreground animate-spin" />
@@ -253,11 +260,11 @@ function CharacterCard({
               <img
                 src={character.image}
                 alt={character.name}
-                className={`w-full h-full object-cover ${isSelected ? "" : "grayscale"}`}
+                className={`w-full h-full object-cover transition-all duration-300 ${isSelected ? "" : "grayscale group-hover:grayscale-0"}`}
                 onError={handleImageError}
               />
             ) : (
-              <div className={`w-full h-full flex items-center justify-center text-lg font-semibold ${isSelected ? "bg-background/20 text-background" : "bg-muted text-muted-foreground"}`}>
+              <div className={`w-full h-full flex items-center justify-center text-lg font-display font-semibold ${isSelected ? "bg-background/20 text-background" : "bg-muted text-muted-foreground"}`}>
                 {character.name.charAt(0)}
               </div>
             )}
@@ -265,10 +272,10 @@ function CharacterCard({
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <div className={`font-semibold ${isSelected ? "text-background" : "text-foreground"}`}>
+            <div className={`font-display font-semibold ${isSelected ? "text-background" : "text-foreground"}`}>
               {character.name}
             </div>
-            <div className={`text-xs ${isSelected ? "text-background/70" : "text-muted-foreground"}`}>
+            <div className={`text-xs font-mono ${isSelected ? "text-background/70" : "text-muted-foreground"}`}>
               {character.era}
             </div>
             <p className={`mt-1 line-clamp-2 text-xs ${isSelected ? "text-background/80" : "text-foreground/80"}`}>
@@ -279,7 +286,7 @@ function CharacterCard({
       </button>
 
       {/* Bottom row with Learn More and Selection indicator */}
-      <div className={`mt-2 pt-2 border-t flex items-center justify-between ${
+      <div className={`mt-3 pt-3 border-t flex items-center justify-between ${
         isSelected ? "border-background/20" : "border-border"
       }`}>
         <button
@@ -287,14 +294,14 @@ function CharacterCard({
             e.stopPropagation();
             onLearnMore();
           }}
-          className={`text-xs underline underline-offset-2 hover:no-underline ${
+          className={`text-xs font-mono underline underline-offset-2 hover:no-underline ${
             isSelected ? "text-background/80 hover:text-background" : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Learn more
         </button>
         {isSelected && (
-          <span className="text-xs text-background/80">✓ Selected</span>
+          <span className="text-xs font-mono text-background/80">✓ Selected</span>
         )}
       </div>
     </div>
@@ -322,15 +329,21 @@ function CharacterModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-background border border-border shadow-xl animate-fade-in-up"
+        className="w-full max-w-lg bg-background border-2 border-foreground relative animate-fade-in-up"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Terminal-style corner brackets */}
+        <div className="absolute top-2 left-2 font-mono text-xs text-border">┌</div>
+        <div className="absolute top-2 right-2 font-mono text-xs text-border">┐</div>
+        <div className="absolute bottom-2 left-2 font-mono text-xs text-border">└</div>
+        <div className="absolute bottom-2 right-2 font-mono text-xs text-border">┘</div>
+
         {/* Modal Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <SectionLabel>Tutor Profile</SectionLabel>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center hover:bg-muted transition-colors"
+            className="w-8 h-8 flex items-center justify-center hover:bg-muted transition-colors border border-transparent hover:border-border"
             aria-label="Close modal"
           >
             ✕
@@ -341,7 +354,7 @@ function CharacterModal({
         <div className="p-6">
           {/* Character Header */}
           <div className="flex gap-4 mb-6">
-            <div className="w-24 h-24 bg-muted overflow-hidden shrink-0">
+            <div className="w-24 h-24 bg-muted overflow-hidden shrink-0 border border-border">
               <img
                 src={character.image}
                 alt={character.name}
@@ -350,12 +363,12 @@ function CharacterModal({
               />
             </div>
             <div className="flex-1">
-              <h3 className="text-xl font-semibold mb-1">{character.name}</h3>
-              <div className="text-sm text-muted-foreground mb-2">
+              <h3 className="text-xl font-display font-semibold mb-1">{character.name}</h3>
+              <div className="text-sm text-muted-foreground font-mono mb-2">
                 {character.title} • {character.era}
               </div>
               {isSelected && (
-                <span className="inline-block px-2 py-1 bg-foreground text-background text-xs">
+                <span className="inline-block px-2 py-1 bg-foreground text-background text-xs font-mono">
                   ✓ Currently Selected
                 </span>
               )}
@@ -378,9 +391,13 @@ function CharacterModal({
               </p>
             </div>
 
-            <div className="p-4 bg-muted/30 border border-border">
+            <div className="p-4 bg-muted/30 border-2 border-border relative">
+              <div className="absolute top-1 left-1 font-mono text-[10px] text-border">┌</div>
+              <div className="absolute top-1 right-1 font-mono text-[10px] text-border">┐</div>
+              <div className="absolute bottom-1 left-1 font-mono text-[10px] text-border">└</div>
+              <div className="absolute bottom-1 right-1 font-mono text-[10px] text-border">┘</div>
               <div className="text-sm text-muted-foreground">
-                <strong className="text-foreground">What to expect:</strong> When learning with {character.name}, 
+                <strong className="text-foreground font-display">What to expect:</strong> When learning with {character.name}, 
                 expect a unique experience shaped by their historical expertise and personality. 
                 They'll guide you through topics using their distinctive approach to teaching and discovery.
               </div>
@@ -389,19 +406,20 @@ function CharacterModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex justify-end gap-3 p-4 border-t border-border bg-muted/20">
+        <div className="flex justify-end gap-3 p-4 border-t-2 border-border bg-muted/20">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm border border-border hover:border-foreground transition-colors"
+            className="px-5 py-2.5 text-sm border-2 border-border hover:border-foreground transition-all duration-300"
           >
             Close
           </button>
           {!isSelected && (
             <button
               onClick={onSelect}
-              className="px-4 py-2 text-sm bg-foreground text-background font-medium hover:bg-foreground/90 transition-colors"
+              className="group px-5 py-2.5 text-sm bg-foreground text-background font-medium hover:bg-foreground/90 transition-all duration-300 inline-flex items-center gap-2"
             >
               Select {character.name}
+              <span className="group-hover:translate-x-1 transition-transform">→</span>
             </button>
           )}
         </div>

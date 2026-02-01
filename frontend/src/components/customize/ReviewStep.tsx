@@ -153,7 +153,13 @@ export function ReviewStep({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         {/* Left: Session Summary */}
         <BlurFade delay={0.2}>
-          <div className="border border-border bg-muted/20 h-full">
+          <div className="border-2 border-border bg-muted/20 h-full relative">
+            {/* Terminal-style corner brackets */}
+            <div className="absolute top-1 left-1 font-mono text-[10px] text-border">┌</div>
+            <div className="absolute top-1 right-1 font-mono text-[10px] text-border">┐</div>
+            <div className="absolute bottom-1 left-1 font-mono text-[10px] text-border">└</div>
+            <div className="absolute bottom-1 right-1 font-mono text-[10px] text-border">┘</div>
+
             {/* Topic */}
             <div className="p-4 border-b border-border">
               <SectionLabel className="mb-1">Topic</SectionLabel>
@@ -167,7 +173,7 @@ export function ReviewStep({
                 <img
                   src={character?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(tutorName)}&background=1a1a1a&color=fff&size=128&font-size=0.4`}
                   alt={tutorName}
-                  className="w-10 h-10 object-cover bg-muted shrink-0"
+                  className="w-12 h-12 object-cover bg-muted shrink-0 border border-border"
                   onError={(e) => {
                     e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(tutorName)}&background=1a1a1a&color=fff&size=128&font-size=0.4`;
                   }}
@@ -190,7 +196,7 @@ export function ReviewStep({
             <div className="p-4">
               <SectionLabel className="mb-2">Voice</SectionLabel>
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-muted flex items-center justify-center text-sm shrink-0">
+                <div className="w-10 h-10 bg-muted border border-border flex items-center justify-center text-sm shrink-0">
                   🔊
                 </div>
                 <div className="min-w-0">
@@ -204,7 +210,13 @@ export function ReviewStep({
 
         {/* Right: Course Outline */}
         <BlurFade delay={0.25}>
-          <div className="border border-border bg-muted/20 h-full flex flex-col">
+          <div className="border-2 border-border bg-muted/20 h-full flex flex-col relative">
+            {/* Terminal-style corner brackets */}
+            <div className="absolute top-1 left-1 font-mono text-[10px] text-border">┌</div>
+            <div className="absolute top-1 right-1 font-mono text-[10px] text-border">┐</div>
+            <div className="absolute bottom-1 left-1 font-mono text-[10px] text-border">└</div>
+            <div className="absolute bottom-1 right-1 font-mono text-[10px] text-border">┘</div>
+
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div>
                 <SectionLabel className="mb-0.5">Course Outline</SectionLabel>
@@ -216,7 +228,7 @@ export function ReviewStep({
                       : "AI-generated • Click to edit"}
                 </HelpText>
               </div>
-              <div className="text-xs text-muted-foreground bg-muted px-2 py-1">
+              <div className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1">
                 {isLoadingOutline || isStreamingOutline ? (
                   outlineProgress ? `${outlineProgress.current}/${outlineProgress.total}` : "..."
                 ) : (
@@ -268,23 +280,29 @@ export function ReviewStep({
 
       {/* What to expect */}
       <BlurFade delay={0.3}>
-        <div className="mb-6 p-4 bg-muted/30 border border-border">
-          <CardTitle className="mb-2">What happens next?</CardTitle>
-          <ul className="space-y-2">
-            <li className="flex items-start gap-2">
-              <span className="w-5 h-5 bg-foreground text-background flex items-center justify-center text-xs font-bold shrink-0">
+        <div className="mb-6 p-5 bg-muted/30 border-2 border-border relative">
+          {/* Terminal-style corner brackets */}
+          <div className="absolute top-1 left-1 font-mono text-[10px] text-border">┌</div>
+          <div className="absolute top-1 right-1 font-mono text-[10px] text-border">┐</div>
+          <div className="absolute bottom-1 left-1 font-mono text-[10px] text-border">└</div>
+          <div className="absolute bottom-1 right-1 font-mono text-[10px] text-border">┘</div>
+
+          <CardTitle className="mb-3">What happens next?</CardTitle>
+          <ul className="space-y-3">
+            <li className="flex items-start gap-3">
+              <span className="w-6 h-6 bg-foreground text-background flex items-center justify-center text-xs font-bold font-mono shrink-0 border-2 border-foreground">
                 1
               </span>
               <HelpText>You'll enter a voice conversation with your AI tutor</HelpText>
             </li>
-            <li className="flex items-start gap-2">
-              <span className="w-5 h-5 bg-foreground text-background flex items-center justify-center text-xs font-bold shrink-0">
+            <li className="flex items-start gap-3">
+              <span className="w-6 h-6 bg-foreground text-background flex items-center justify-center text-xs font-bold font-mono shrink-0 border-2 border-foreground">
                 2
               </span>
               <HelpText>Speak naturally — ask questions or request explanations</HelpText>
             </li>
-            <li className="flex items-start gap-2">
-              <span className="w-5 h-5 bg-foreground text-background flex items-center justify-center text-xs font-bold shrink-0">
+            <li className="flex items-start gap-3">
+              <span className="w-6 h-6 bg-foreground text-background flex items-center justify-center text-xs font-bold font-mono shrink-0 border-2 border-foreground">
                 3
               </span>
               <HelpText>Your tutor will guide you through the outline above</HelpText>
@@ -295,21 +313,23 @@ export function ReviewStep({
 
       {/* Navigation */}
       <BlurFade delay={0.4}>
-        <div className="flex justify-between items-center border-t border-border pt-4 -mx-6 px-6 -mb-6 pb-6 bg-muted/20">
+        <div className="flex justify-between items-center border-t-2 border-border pt-4 -mx-6 px-6 -mb-6 pb-6 bg-muted/20">
           <button
             onClick={onBack}
-            className="px-4 py-2.5 border border-border text-sm hover:border-foreground transition-colors"
+            className="group px-5 py-3 border-2 border-border text-sm hover:border-foreground transition-all duration-300 inline-flex items-center gap-2"
           >
-            ← Back
+            <span className="group-hover:-translate-x-1 transition-transform">←</span>
+            Back
           </button>
           <button
             onClick={() => onStart(outline)}
             disabled={(isLoadingOutline && !isStreamingOutline) || outline.length === 0}
-            className="px-6 py-3 bg-foreground text-background font-semibold hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="group px-6 py-3 bg-foreground text-background font-semibold hover:bg-foreground/90 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
           >
             {isLoadingOutline && !isStreamingOutline ? "Preparing..." : 
-             isStreamingOutline ? `Start Learning (${outline.length} sections ready) →` :
-             "Start Learning →"}
+             isStreamingOutline ? `Start Learning (${outline.length} sections ready)` :
+             "Start Learning"}
+            <span className="group-hover:translate-x-1 transition-transform">→</span>
           </button>
         </div>
       </BlurFade>

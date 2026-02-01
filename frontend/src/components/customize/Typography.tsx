@@ -9,7 +9,7 @@ interface TypographyProps {
 
 export function StepTitle({ children, className = "" }: TypographyProps) {
   return (
-    <h2 className={`text-xl md:text-2xl font-semibold tracking-tight ${className}`}>
+    <h2 className={`text-2xl md:text-3xl font-display tracking-tight ${className}`}>
       {children}
     </h2>
   );
@@ -25,7 +25,7 @@ export function StepDescription({ children, className = "" }: TypographyProps) {
 
 export function SectionLabel({ children, className = "" }: TypographyProps) {
   return (
-    <div className={`text-xs text-muted-foreground uppercase tracking-wider font-medium ${className}`}>
+    <div className={`text-xs text-muted-foreground uppercase tracking-widest font-mono ${className}`}>
       {children}
     </div>
   );
@@ -33,7 +33,7 @@ export function SectionLabel({ children, className = "" }: TypographyProps) {
 
 export function CardTitle({ children, className = "" }: TypographyProps) {
   return (
-    <div className={`font-semibold ${className}`}>
+    <div className={`font-display font-semibold ${className}`}>
       {children}
     </div>
   );
@@ -41,7 +41,7 @@ export function CardTitle({ children, className = "" }: TypographyProps) {
 
 export function CardSubtitle({ children, className = "" }: TypographyProps) {
   return (
-    <div className={`text-xs text-muted-foreground ${className}`}>
+    <div className={`text-xs text-muted-foreground font-mono ${className}`}>
       {children}
     </div>
   );
