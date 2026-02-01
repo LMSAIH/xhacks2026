@@ -12,7 +12,11 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "db:migrate": "wrangler d1 execute sfu-ai-teacher-db --file=./sql/schema.sql",
-    "db:migrate:local": "wrangler d1 execute sfu-ai-teacher-db --local --file=./sql/schema.sql"
+    "db:migrate:local": "wrangler d1 execute sfu-ai-teacher-db --local --file=./sql/schema.sql",
+    "db:seed": "wrangler d1 execute sfu-ai-teacher-db --file=./sql/seed.sql",
+    "db:seed:local": "wrangler d1 execute sfu-ai-teacher-db --local --file=./sql/seed.sql",
+    "db:reset:local": "npm run db:migrate:local && npm run db:seed:local",
+    "db:studio": "wrangler d1 studio sfu-ai-teacher-db --local"
   },
   "keywords": [
     "sfu",
