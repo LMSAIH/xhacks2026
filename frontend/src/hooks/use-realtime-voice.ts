@@ -46,41 +46,58 @@ export function useRealtimeVoice({
       const base64 = audioQueueRef.current.shift();
       if (!base64) continue;
       
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      
       try {
         const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
         
-        // For MP3, use Audio element instead of decodeAudioData (more reliable)
+        // Use native Audio API for MP3 playback (most reliable)
         const blob = new Blob([bytes], { type: 'audio/mp3' });
         const url = URL.createObjectURL(blob);
         
         const audio = new Audio();
         audio.src = url;
-        audio.crossOrigin = 'anonymous';
         
-        // Create a media element audio source and connect to destination
-        const source = audioContextRef.current.createMediaElementAudioSource(audio);
-        source.connect(audioContextRef.current.destination);
+        console.log('Playing audio chunk...');
         
         // Wait for audio to finish playing
-        await new Promise<void>((resolve) => {
-          audio.onended = () => {
+        await new Promise<void>((resolve, reject) => {
+          const cleanup = () => {
             URL.revokeObjectURL(url);
+            audio.pause();
+            audio.src = '';
+          };
+          
+          const handleEnded = () => {
+            cleanup();
             resolve();
           };
-          audio.onerror = (e) => {
+          
+          const handleError = (e: Event | string) => {
             console.error('Audio playback error:', e);
-            URL.revokeObjectURL(url);
+            cleanup();
+            // Resolve anyway to continue with next audio
             resolve();
           };
-          audio.play().catch(e => {
-            console.error('Audio play error:', e);
-            URL.revokeObjectURL(url);
+          
+          const handleCanPlay = () => {
+            audio.play().catch((err) => {
+              console.error('Audio play() failed:', err);
+              handleError(err);
+            });
+          };
+          
+          audio.addEventListener('ended', handleEnded, { once: true });
+          audio.addEventListener('error', handleError, { once: true });
+          audio.addEventListener('canplay', handleCanPlay, { once: true });
+          
+          // Set timeout in case audio never loads
+          const timeout = setTimeout(() => {
+            console.warn('Audio load timeout, skipping...');
+            cleanup();
             resolve();
-          });
+          }, 5000);
+          
+          // Try to load
+          audio.load();
         });
       } catch (e) {
         console.error('Audio queue processing error:', e);
