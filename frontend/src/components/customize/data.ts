@@ -66,49 +66,103 @@ export const CHARACTERS: Character[] = [
   },
 ];
 
-// Voice options data
+// Voice options data - Cloudflare Workers AI / Deepgram Aura voices
 export interface Voice {
   id: string;
   name: string;
   description: string;
   personality: string;
+  gender: "male" | "female";
+  bestFor: string[];
 }
 
 export const VOICES: Voice[] = [
   {
-    id: "alloy",
-    name: "Alloy",
-    description: "Neutral & balanced",
-    personality: "Professional and clear, good for any subject",
+    id: "aura-asteria-en",
+    name: "Asteria",
+    description: "Warm & professional",
+    personality: "Friendly and approachable, perfect for general tutoring",
+    gender: "female",
+    bestFor: ["general tutoring", "math", "science"],
   },
   {
-    id: "echo",
-    name: "Echo",
-    description: "Warm & thoughtful",
-    personality: "Calm and reassuring, great for complex topics",
+    id: "aura-luna-en",
+    name: "Luna",
+    description: "Soft & calm",
+    personality: "Gentle and patient, great for relaxed learning",
+    gender: "female",
+    bestFor: ["meditation", "language learning", "bedtime stories"],
   },
   {
-    id: "fable",
-    name: "Fable",
-    description: "British & expressive",
-    personality: "Engaging storyteller, perfect for history and literature",
+    id: "aura-athena-en",
+    name: "Athena",
+    description: "Confident & clear",
+    personality: "Assertive and articulate, ideal for business topics",
+    gender: "female",
+    bestFor: ["business", "presentations", "leadership"],
   },
   {
-    id: "onyx",
-    name: "Onyx",
-    description: "Deep & authoritative",
-    personality: "Confident and commanding, ideal for science and math",
+    id: "aura-hera-en",
+    name: "Hera",
+    description: "Mature & authoritative",
+    personality: "Wise and commanding, perfect for advanced subjects",
+    gender: "female",
+    bestFor: ["history", "philosophy", "advanced topics"],
   },
   {
-    id: "nova",
-    name: "Nova",
-    description: "Bright & friendly",
-    personality: "Energetic and encouraging, great for beginners",
+    id: "aura-orion-en",
+    name: "Orion",
+    description: "Deep & professional",
+    personality: "Thoughtful and knowledgeable, great for technical topics",
+    gender: "male",
+    bestFor: ["engineering", "technical topics", "podcasts"],
   },
   {
-    id: "shimmer",
-    name: "Shimmer",
-    description: "Soft & clear",
-    personality: "Gentle and patient, perfect for step-by-step learning",
+    id: "aura-arcas-en",
+    name: "Arcas",
+    description: "Young & energetic",
+    personality: "Enthusiastic and lively, ideal for engaging content",
+    gender: "male",
+    bestFor: ["gaming", "sports", "youth content"],
+  },
+  {
+    id: "aura-perseus-en",
+    name: "Perseus",
+    description: "Warm & friendly",
+    personality: "Approachable and helpful, versatile for any subject",
+    gender: "male",
+    bestFor: ["customer service", "tutorials", "general"],
+  },
+  {
+    id: "aura-angus-en",
+    name: "Angus",
+    description: "British & refined",
+    personality: "Sophisticated and eloquent, perfect for literature",
+    gender: "male",
+    bestFor: ["literature", "arts", "sophisticated topics"],
+  },
+  {
+    id: "aura-orpheus-en",
+    name: "Orpheus",
+    description: "Smooth storyteller",
+    personality: "Captivating narrator, ideal for creative content",
+    gender: "male",
+    bestFor: ["narratives", "audiobooks", "creative writing"],
+  },
+  {
+    id: "aura-helios-en",
+    name: "Helios",
+    description: "Clear news anchor",
+    personality: "Crisp and professional, great for formal content",
+    gender: "male",
+    bestFor: ["news", "announcements", "formal content"],
+  },
+  {
+    id: "aura-zeus-en",
+    name: "Zeus",
+    description: "Powerful & commanding",
+    personality: "Bold and inspiring, perfect for motivation",
+    gender: "male",
+    bestFor: ["motivation", "leadership", "epic content"],
   },
 ];

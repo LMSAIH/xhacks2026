@@ -32,11 +32,12 @@
 			"id": "1830955e6b9847ad82769136f86a1cde"
 		}
 	],
-	// Vectorize index for RAG
+	// Vectorize index for RAG (remote: true for local dev access)
 	"vectorize": [
 		{
 			"binding": "VECTORIZE",
-			"index_name": "sfu-course-index"
+			"index_name": "sfu-course-index",
+			"remote": true
 		}
 	],
 	// Durable Objects for voice sessions

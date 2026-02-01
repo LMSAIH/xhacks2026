@@ -78,13 +78,43 @@ describe('SFU AI Teacher API', () => {
       });
     });
 
-    it('GET /health should return healthy status', async () => {
+    it('GET /health should return comprehensive health status', async () => {
+      // Setup mock for successful DB query
+      const mockPrepare = vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnThis(),
+        first: vi.fn().mockResolvedValue({ count: 5 }),
+      });
+      env.DB.prepare = mockPrepare;
+
       const req = new Request('http://localhost/health');
       const res = await app.fetch(req, env);
       
       expect(res.status).toBe(200);
-      const json = await res.json();
-      expect(json).toEqual({ status: 'healthy' });
+      const json = await res.json() as { status: string; timestamp: string; checks: Record<string, unknown> };
+      expect(json.status).toBe('healthy');
+      expect(json.timestamp).toBeDefined();
+      expect(json.checks).toBeDefined();
+      expect(json.checks.database).toBeDefined();
+      expect(json.checks.kv).toBeDefined();
+      expect(json.checks.ai).toBeDefined();
+      expect(json.checks.durableObjects).toBeDefined();
+    });
+
+    it('GET /health should return degraded status when DB fails', async () => {
+      // Setup mock for failing DB query
+      env.DB.prepare = vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnThis(),
+        first: vi.fn().mockRejectedValue(new Error('DB connection failed')),
+      });
+
+      const req = new Request('http://localhost/health');
+      const res = await app.fetch(req, env);
+      
+      expect(res.status).toBe(503);
+      const json = await res.json() as { status: string; checks: { database: { status: string; error: string } } };
+      expect(json.status).toBe('degraded');
+      expect(json.checks.database.status).toBe('unhealthy');
+      expect(json.checks.database.error).toBe('DB connection failed');
     });
   });
 
@@ -428,6 +458,573 @@ describe('Voice Data Integrity', () => {
   it('all voice IDs should follow deepgram naming', () => {
     Object.values(VOICES).forEach(voice => {
       expect(voice.id).toMatch(/^aura-[a-z]+-en$/);
+    });
+  });
+});
+
+// ============================================
+// NEW ENDPOINT TESTS
+// ============================================
+
+describe('Course Search and Details Endpoints', () => {
+  let env: Env;
+
+  beforeEach(() => {
+    env = createMockEnv();
+    vi.clearAllMocks();
+  });
+
+  describe('GET /api/courses/search', () => {
+    it('should require query parameter q', async () => {
+      const req = new Request('http://localhost/api/courses/search');
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(400);
+      const json = await res.json() as { success: boolean; error: string };
+      expect(json.success).toBe(false);
+      expect(json.error).toContain('required');
+    });
+
+    it('should return search results with valid query', async () => {
+      // Mock fetch for SFU API
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([
+          { dept: 'CMPT', number: '120', title: 'Intro to CS', description: 'Basic programming' },
+          { dept: 'CMPT', number: '225', title: 'Data Structures', description: 'Advanced programming' },
+        ]),
+      });
+
+      // Mock KV cache miss
+      env.KV.get = vi.fn().mockResolvedValue(null);
+
+      const req = new Request('http://localhost/api/courses/search?q=CMPT');
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(200);
+      const json = await res.json() as { success: boolean; data: { courses: any[] } };
+      expect(json.success).toBe(true);
+      expect(json.data.courses).toBeDefined();
+    });
+
+    it('should use KV cache when available', async () => {
+      const cachedCourses = [
+        { dept: 'MATH', number: '151', title: 'Calculus I', description: 'Limits and derivatives' },
+      ];
+      env.KV.get = vi.fn().mockResolvedValue(cachedCourses);
+
+      const req = new Request('http://localhost/api/courses/search?q=MATH');
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(200);
+      expect(env.KV.get).toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /api/courses/:code/details', () => {
+    it('should return 404 for non-existent course', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+      env.KV.get = vi.fn().mockResolvedValue(null);
+
+      const req = new Request('http://localhost/api/courses/FAKE%20999/details');
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(404);
+      const json = await res.json() as { success: boolean; error: string };
+      expect(json.success).toBe(false);
+    });
+
+    it('should return course with instructor from SFU API', async () => {
+      const mockCourses = [
+        {
+          dept: 'CMPT',
+          number: '120',
+          title: 'Introduction to Computing',
+          description: 'Learn programming basics',
+          units: '3',
+          prerequisites: 'None',
+          offerings: [{ term: 'Fall 2025', instructors: ['John Smith'] }],
+        },
+      ];
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockCourses),
+      });
+      env.KV.get = vi.fn().mockResolvedValue(null);
+
+      const req = new Request('http://localhost/api/courses/CMPT%20120/details');
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(200);
+      const json = await res.json() as { success: boolean; data: { course: any; instructor: any } };
+      expect(json.success).toBe(true);
+      expect(json.data.course.code).toBe('CMPT 120');
+      expect(json.data.instructor).toBeDefined();
+      expect(json.data.instructor.name).toBe('John Smith');
+    });
+
+    it('should cache results in KV', async () => {
+      const mockCourses = [
+        {
+          dept: 'CMPT',
+          number: '225',
+          title: 'Data Structures',
+          description: 'Learn data structures',
+          units: '3',
+          offerings: [],
+        },
+      ];
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockCourses),
+      });
+      env.KV.get = vi.fn().mockResolvedValue(null);
+      env.KV.put = vi.fn().mockResolvedValue(undefined);
+
+      const req = new Request('http://localhost/api/courses/CMPT%20225/details');
+      await app.fetch(req, env);
+
+      expect(env.KV.put).toHaveBeenCalled();
+    });
+  });
+});
+
+describe('Outline Endpoints', () => {
+  let env: Env;
+
+  beforeEach(() => {
+    env = createMockEnv();
+    vi.clearAllMocks();
+  });
+
+  describe('GET /api/courses/:code/outline', () => {
+    it('should return outline from SFU API', async () => {
+      const mockCourses = [
+        {
+          dept: 'CMPT',
+          number: '120',
+          title: 'Introduction to Computing',
+          description: 'Introduction to programming. Basic concepts. Variables and loops. Functions and recursion.',
+          units: '3',
+        },
+      ];
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockCourses),
+      });
+      env.KV.get = vi.fn().mockResolvedValue(null);
+
+      const req = new Request('http://localhost/api/courses/CMPT%20120/outline');
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(200);
+      const json = await res.json() as { success: boolean; data: { courseCode: string; outline: any } };
+      expect(json.success).toBe(true);
+      expect(json.data.courseCode).toBe('CMPT 120');
+      expect(json.data.outline).toBeDefined();
+      expect(json.data.outline.topics).toBeDefined();
+      expect(json.data.outline.learningObjectives).toBeDefined();
+      expect(json.data.outline.summary).toBeDefined();
+    });
+
+    it('should return 404 for non-existent course', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+      env.KV.get = vi.fn().mockResolvedValue(null);
+
+      const req = new Request('http://localhost/api/courses/FAKE%20999/outline');
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(404);
+    });
+
+    it('should return edited outline when sessionId provided', async () => {
+      const editedOutline = {
+        topics: ['Custom Topic 1', 'Custom Topic 2'],
+        learningObjectives: ['Custom Objective'],
+        courseTopics: ['Custom Course Topic'],
+        summary: 'Custom summary',
+      };
+
+      env.DB.prepare = vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnThis(),
+        first: vi.fn().mockResolvedValue({ outline_json: JSON.stringify(editedOutline) }),
+      });
+
+      const req = new Request('http://localhost/api/courses/CMPT%20120/outline?sessionId=test-session-123');
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(200);
+      const json = await res.json() as { success: boolean; data: { outline: any; modified: boolean } };
+      expect(json.success).toBe(true);
+      expect(json.data.modified).toBe(true);
+      expect(json.data.outline.topics).toEqual(['Custom Topic 1', 'Custom Topic 2']);
+    });
+  });
+
+  describe('PUT /api/courses/:code/outline', () => {
+    it('should require sessionId', async () => {
+      const req = new Request('http://localhost/api/courses/CMPT%20120/outline', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          outline: {
+            topics: ['Topic 1'],
+            learningObjectives: ['Objective 1'],
+            courseTopics: ['Course Topic 1'],
+            summary: 'Summary',
+          },
+        }),
+      });
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(400);
+      const json = await res.json() as { success: boolean; error: string };
+      expect(json.success).toBe(false);
+      expect(json.error).toContain('sessionId');
+    });
+
+    it('should require outline', async () => {
+      const req = new Request('http://localhost/api/courses/CMPT%20120/outline', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'test-session-123',
+        }),
+      });
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(400);
+      const json = await res.json() as { success: boolean; error: string };
+      expect(json.success).toBe(false);
+      expect(json.error).toContain('outline');
+    });
+
+    it('should store edited outline successfully', async () => {
+      env.DB.prepare = vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnThis(),
+        run: vi.fn().mockResolvedValue({ success: true }),
+      });
+
+      const req = new Request('http://localhost/api/courses/CMPT%20120/outline', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'test-session-123',
+          outline: {
+            topics: ['Topic 1', 'Topic 2'],
+            learningObjectives: ['Learn X', 'Learn Y'],
+            courseTopics: ['Course Topic'],
+            summary: 'Course summary here',
+          },
+        }),
+      });
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(200);
+      const json = await res.json() as { success: boolean; message: string; data: any };
+      expect(json.success).toBe(true);
+      expect(json.message).toContain('updated');
+      expect(json.data.sessionId).toBe('test-session-123');
+    });
+  });
+});
+
+describe('Session Endpoints', () => {
+  let env: Env;
+
+  beforeEach(() => {
+    env = createMockEnv();
+    vi.clearAllMocks();
+
+    // Mock crypto.randomUUID
+    vi.stubGlobal('crypto', {
+      randomUUID: () => 'test-uuid-12345',
+    });
+  });
+
+  describe('POST /api/sessions', () => {
+    it('should require courseCode', async () => {
+      const req = new Request('http://localhost/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instructor: { sfuId: 'john-smith', name: 'John Smith' },
+          voiceConfig: { voiceId: 'aura-asteria-en' },
+          personalityConfig: { traits: [], systemPrompt: 'You are a tutor' },
+        }),
+      });
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(400);
+      const json = await res.json() as { success: boolean; error: string };
+      expect(json.error).toContain('courseCode');
+    });
+
+    it('should require instructor with sfuId and name', async () => {
+      const req = new Request('http://localhost/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseCode: 'CMPT 120',
+          instructor: { name: 'John Smith' }, // missing sfuId
+          voiceConfig: { voiceId: 'aura-asteria-en' },
+          personalityConfig: { traits: [], systemPrompt: 'You are a tutor' },
+        }),
+      });
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(400);
+      const json = await res.json() as { success: boolean; error: string };
+      expect(json.error).toContain('instructor');
+    });
+
+    it('should require voiceConfig with voiceId', async () => {
+      const req = new Request('http://localhost/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseCode: 'CMPT 120',
+          instructor: { sfuId: 'john-smith', name: 'John Smith' },
+          voiceConfig: {}, // missing voiceId
+          personalityConfig: { traits: [], systemPrompt: 'You are a tutor' },
+        }),
+      });
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(400);
+      const json = await res.json() as { success: boolean; error: string };
+      expect(json.error).toContain('voiceConfig');
+    });
+
+    it('should require personalityConfig with systemPrompt', async () => {
+      const req = new Request('http://localhost/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseCode: 'CMPT 120',
+          instructor: { sfuId: 'john-smith', name: 'John Smith' },
+          voiceConfig: { voiceId: 'aura-asteria-en' },
+          personalityConfig: { traits: [] }, // missing systemPrompt
+        }),
+      });
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(400);
+      const json = await res.json() as { success: boolean; error: string };
+      expect(json.error).toContain('personalityConfig');
+    });
+
+    it('should create session successfully with all required fields', async () => {
+      // Mock SFU API for outline
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([
+          {
+            dept: 'CMPT',
+            number: '120',
+            title: 'Intro to CS',
+            description: 'Basic programming concepts',
+            units: '3',
+          },
+        ]),
+      });
+
+      // Mock KV
+      env.KV.get = vi.fn().mockResolvedValue(null);
+      env.KV.put = vi.fn().mockResolvedValue(undefined);
+
+      // Mock DB operations
+      env.DB.prepare = vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnThis(),
+        run: vi.fn().mockResolvedValue({ success: true }),
+        first: vi.fn().mockResolvedValue(null),
+      });
+
+      // Mock AI for embeddings
+      env.AI.run = vi.fn().mockResolvedValue({
+        shape: [1, 768],
+        data: [[...Array(768).fill(0.1)]],
+      });
+
+      // Mock Vectorize
+      env.VECTORIZE.insert = vi.fn().mockResolvedValue({ count: 1 });
+
+      const req = new Request('http://localhost/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseCode: 'CMPT 120',
+          instructor: { sfuId: 'john-smith', name: 'John Smith', rating: 4.5 },
+          voiceConfig: { voiceId: 'aura-asteria-en', speed: 1.0 },
+          personalityConfig: {
+            traits: ['Clear', 'Patient', 'Engaging'],
+            systemPrompt: 'You are a helpful tutor.',
+          },
+        }),
+      });
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(200);
+      const json = await res.json() as { success: boolean; data: { sessionId: string; ragChunkCount: number; personalityPrompt: string } };
+      expect(json.success).toBe(true);
+      expect(json.data.sessionId).toBeDefined();
+      expect(json.data.ragChunkCount).toBeGreaterThan(0);
+      expect(json.data.personalityPrompt).toBeDefined();
+      expect(json.data.personalityPrompt).toContain('CMPT 120');
+    });
+
+    it('should use provided outline instead of fetching', async () => {
+      // Mock DB operations
+      env.DB.prepare = vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnThis(),
+        run: vi.fn().mockResolvedValue({ success: true }),
+        first: vi.fn().mockResolvedValue(null),
+      });
+
+      // Mock AI for embeddings
+      env.AI.run = vi.fn().mockResolvedValue({
+        shape: [4, 768],
+        data: Array(4).fill([...Array(768).fill(0.1)]),
+      });
+
+      // Mock Vectorize
+      env.VECTORIZE.insert = vi.fn().mockResolvedValue({ count: 4 });
+
+      const customOutline = {
+        topics: ['Custom Topic 1', 'Custom Topic 2'],
+        learningObjectives: ['Custom Objective'],
+        courseTopics: ['Custom Course Topic'],
+        summary: 'Custom summary for testing',
+      };
+
+      const req = new Request('http://localhost/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseCode: 'CMPT 120',
+          instructor: { sfuId: 'john-smith', name: 'John Smith' },
+          voiceConfig: { voiceId: 'aura-asteria-en' },
+          personalityConfig: { traits: [], systemPrompt: 'You are a tutor' },
+          outline: customOutline,
+        }),
+      });
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(200);
+      // Verify DB was called to store edited outline
+      expect(env.DB.prepare).toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /api/sessions/:id', () => {
+    it('should return 404 for non-existent session', async () => {
+      env.DB.prepare = vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnThis(),
+        first: vi.fn().mockResolvedValue(null),
+      });
+
+      const req = new Request('http://localhost/api/sessions/non-existent-id');
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(404);
+      const json = await res.json() as { success: boolean; error: string };
+      expect(json.success).toBe(false);
+    });
+
+    it('should return session data', async () => {
+      const mockSession = {
+        id: 'test-session-123',
+        course_code: 'CMPT 120',
+        instructor_id: 'instructor-1',
+        voice_config: JSON.stringify({ voiceId: 'aura-asteria-en' }),
+        personality_config: JSON.stringify({ traits: ['Clear'], systemPrompt: 'You are a tutor' }),
+        outline_version: null,
+        vectorize_ref: 'session:test-session-123',
+        rag_chunk_count: 5,
+        personality_prompt: 'You are a CMPT 120 tutor',
+        created_at: '2025-01-31T00:00:00Z',
+      };
+
+      env.DB.prepare = vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnThis(),
+        first: vi.fn().mockResolvedValue(mockSession),
+      });
+
+      const req = new Request('http://localhost/api/sessions/test-session-123');
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(200);
+      const json = await res.json() as { success: boolean; data: any };
+      expect(json.success).toBe(true);
+      expect(json.data.id).toBe('test-session-123');
+      expect(json.data.courseCode).toBe('CMPT 120');
+      expect(json.data.voiceConfig.voiceId).toBe('aura-asteria-en');
+    });
+  });
+
+  describe('GET /api/sessions/:id/rag', () => {
+    it('should require query parameter q', async () => {
+      const req = new Request('http://localhost/api/sessions/test-session-123/rag');
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(400);
+      const json = await res.json() as { success: boolean; error: string };
+      expect(json.error).toContain('required');
+    });
+
+    it('should return RAG chunks for query', async () => {
+      // Mock AI for query embedding
+      env.AI.run = vi.fn().mockResolvedValue({
+        shape: [1, 768],
+        data: [[...Array(768).fill(0.1)]],
+      });
+
+      // Mock Vectorize query
+      env.VECTORIZE.query = vi.fn().mockResolvedValue({
+        matches: [
+          { id: 'chunk-1', score: 0.95, metadata: { text: 'This is chunk 1 about programming' } },
+          { id: 'chunk-2', score: 0.90, metadata: { text: 'This is chunk 2 about variables' } },
+        ],
+      });
+
+      const req = new Request('http://localhost/api/sessions/test-session-123/rag?q=programming%20basics');
+      const res = await app.fetch(req, env);
+
+      expect(res.status).toBe(200);
+      const json = await res.json() as { success: boolean; data: { chunks: string[]; chunkCount: number } };
+      expect(json.success).toBe(true);
+      expect(json.data.chunks.length).toBe(2);
+      expect(json.data.chunkCount).toBe(2);
+    });
+
+    it('should support topK parameter', async () => {
+      env.AI.run = vi.fn().mockResolvedValue({
+        shape: [1, 768],
+        data: [[...Array(768).fill(0.1)]],
+      });
+
+      env.VECTORIZE.query = vi.fn().mockResolvedValue({
+        matches: [
+          { id: 'chunk-1', score: 0.95, metadata: { text: 'Chunk 1' } },
+        ],
+      });
+
+      const req = new Request('http://localhost/api/sessions/test-session-123/rag?q=test&topK=10');
+      await app.fetch(req, env);
+
+      expect(env.VECTORIZE.query).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.objectContaining({ topK: 10 })
+      );
     });
   });
 });

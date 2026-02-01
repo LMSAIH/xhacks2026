@@ -110,8 +110,19 @@ function VoiceCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className={`font-semibold ${isSelected ? "text-background" : "text-foreground"}`}>
-            {voice.name}
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`font-semibold ${isSelected ? "text-background" : "text-foreground"}`}>
+              {voice.name}
+            </span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+              isSelected 
+                ? "bg-background/20 text-background" 
+                : voice.gender === "female" 
+                  ? "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300" 
+                  : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+            }`}>
+              {voice.gender === "female" ? "F" : "M"}
+            </span>
           </div>
           <div className={`text-xs mb-1 ${isSelected ? "text-background/70" : "text-muted-foreground"}`}>
             {voice.description}
@@ -119,6 +130,21 @@ function VoiceCard({
           <p className={`text-xs line-clamp-2 ${isSelected ? "text-background/80" : "text-foreground/80"}`}>
             {voice.personality}
           </p>
+          {/* Best for tags */}
+          <div className="flex flex-wrap gap-1 mt-2">
+            {voice.bestFor.slice(0, 2).map((tag) => (
+              <span
+                key={tag}
+                className={`text-[10px] px-1.5 py-0.5 rounded ${
+                  isSelected
+                    ? "bg-background/10 text-background/70"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Play button */}
@@ -134,13 +160,13 @@ function VoiceCard({
           }`}
           aria-label={`Play ${voice.name} voice preview`}
         >
-          <span>▶</span>
+          <span>&#9658;</span>
         </button>
       </div>
 
       {isSelected && (
         <div className="mt-2 pt-2 border-t border-background/20 text-xs text-background/80">
-          ✓ Selected
+          Selected
         </div>
       )}
     </button>
