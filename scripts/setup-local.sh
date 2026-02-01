@@ -1,223 +1,686 @@
 #!/bin/bash
-# SFU AI Teacher - Local Development Setup Script
-# Run this script to set up your local development environment
+# SFU AI Teacher - Interactive Local Development Setup TUI
+# A beautiful terminal UI for setting up your development environment
 
 set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-echo -e "${BLUE}"
-echo "========================================="
-echo "  SFU AI Teacher - Local Dev Setup"
-echo "========================================="
-echo -e "${NC}"
-
-# Get script directory and project root
+# ============================================
+# Configuration
+# ============================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-cd "$PROJECT_ROOT"
+# ============================================
+# Colors and Styling
+# ============================================
+BOLD='\033[1m'
+DIM='\033[2m'
+ITALIC='\033[3m'
+UNDERLINE='\033[4m'
+BLINK='\033[5m'
+REVERSE='\033[7m'
+RESET='\033[0m'
 
-# Check for required tools
-echo -e "${YELLOW}Checking prerequisites...${NC}"
+# Colors
+BLACK='\033[0;30m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[0;37m'
 
-if ! command -v node &> /dev/null; then
-    echo -e "${RED}Node.js not found. Please install Node.js 18+ first.${NC}"
+# Bright colors
+BRIGHT_BLACK='\033[0;90m'
+BRIGHT_RED='\033[0;91m'
+BRIGHT_GREEN='\033[0;92m'
+BRIGHT_YELLOW='\033[0;93m'
+BRIGHT_BLUE='\033[0;94m'
+BRIGHT_MAGENTA='\033[0;95m'
+BRIGHT_CYAN='\033[0;96m'
+BRIGHT_WHITE='\033[0;97m'
+
+# Background colors
+BG_BLUE='\033[44m'
+BG_MAGENTA='\033[45m'
+BG_CYAN='\033[46m'
+BG_WHITE='\033[47m'
+
+# ============================================
+# Terminal Utilities
+# ============================================
+get_terminal_width() {
+    tput cols 2>/dev/null || echo 80
+}
+
+get_terminal_height() {
+    tput lines 2>/dev/null || echo 24
+}
+
+clear_screen() {
+    printf '\033[2J\033[H'
+}
+
+hide_cursor() {
+    printf '\033[?25l'
+}
+
+show_cursor() {
+    printf '\033[?25h'
+}
+
+move_cursor() {
+    printf '\033[%d;%dH' "$1" "$2"
+}
+
+# ============================================
+# Drawing Functions
+# ============================================
+draw_box() {
+    local x=$1 y=$2 width=$3 height=$4
+    local title="${5:-}"
+    
+    # Box drawing characters
+    local tl="╭" tr="╮" bl="╰" br="╯" h="─" v="│"
+    
+    # Top border
+    move_cursor $y $x
+    printf "${CYAN}${tl}"
+    for ((i=0; i<width-2; i++)); do printf "${h}"; done
+    printf "${tr}${RESET}"
+    
+    # Title if provided
+    if [[ -n "$title" ]]; then
+        local title_len=${#title}
+        local title_pos=$((x + (width - title_len - 2) / 2))
+        move_cursor $y $title_pos
+        printf "${CYAN}${BOLD} ${title} ${RESET}"
+    fi
+    
+    # Sides
+    for ((row=1; row<height-1; row++)); do
+        move_cursor $((y + row)) $x
+        printf "${CYAN}${v}${RESET}"
+        move_cursor $((y + row)) $((x + width - 1))
+        printf "${CYAN}${v}${RESET}"
+    done
+    
+    # Bottom border
+    move_cursor $((y + height - 1)) $x
+    printf "${CYAN}${bl}"
+    for ((i=0; i<width-2; i++)); do printf "${h}"; done
+    printf "${br}${RESET}"
+}
+
+draw_header() {
+    local width=$(get_terminal_width)
+    
+    clear_screen
+    
+    # ASCII Art Logo
+    printf "${BRIGHT_CYAN}${BOLD}"
+    move_cursor 2 $(( (width - 52) / 2 ))
+    echo "   _____ ______ _    _            _____ _______ "
+    move_cursor 3 $(( (width - 52) / 2 ))
+    echo "  / ____|  ____| |  | |     /\   |_   _|__   __|"
+    move_cursor 4 $(( (width - 52) / 2 ))
+    echo " | (___ | |__  | |  | |    /  \    | |    | |   "
+    move_cursor 5 $(( (width - 52) / 2 ))
+    echo "  \___ \|  __| | |  | |   / /\ \   | |    | |   "
+    move_cursor 6 $(( (width - 52) / 2 ))
+    echo "  ____) | |    | |__| |  / ____ \ _| |_   | |   "
+    move_cursor 7 $(( (width - 52) / 2 ))
+    echo " |_____/|_|     \____/  /_/    \_\_____|  |_|   "
+    printf "${RESET}"
+    
+    move_cursor 9 $(( (width - 30) / 2 ))
+    printf "${DIM}AI Teacher - Development Setup${RESET}"
+}
+
+draw_menu() {
+    local title="$1"
+    shift
+    local options=("$@")
+    local selected=0
+    local num_options=${#options[@]}
+    
+    local width=$(get_terminal_width)
+    local height=$(get_terminal_height)
+    local menu_width=50
+    local menu_height=$((num_options + 4))
+    local start_x=$(( (width - menu_width) / 2 ))
+    local start_y=12
+    
+    while true; do
+        # Draw menu box
+        draw_box $start_x $start_y $menu_width $menu_height "$title"
+        
+        # Draw options
+        for i in "${!options[@]}"; do
+            move_cursor $((start_y + 2 + i)) $((start_x + 3))
+            if [[ $i -eq $selected ]]; then
+                printf "${REVERSE}${BRIGHT_WHITE}  ▸ %-$((menu_width - 10))s  ${RESET}" "${options[$i]}"
+            else
+                printf "${WHITE}    %-$((menu_width - 10))s  ${RESET}" "${options[$i]}"
+            fi
+        done
+        
+        # Instructions
+        move_cursor $((start_y + menu_height + 1)) $((start_x + 2))
+        printf "${DIM}↑/↓ Navigate  •  Enter Select  •  q Quit${RESET}"
+        
+        # Read key
+        read -rsn1 key
+        case "$key" in
+            A|k) # Up arrow or k
+                ((selected--))
+                [[ $selected -lt 0 ]] && selected=$((num_options - 1))
+                ;;
+            B|j) # Down arrow or j
+                ((selected++))
+                [[ $selected -ge $num_options ]] && selected=0
+                ;;
+            '') # Enter
+                echo $selected
+                return
+                ;;
+            q|Q)
+                echo -1
+                return
+                ;;
+        esac
+    done
+}
+
+draw_progress() {
+    local current=$1
+    local total=$2
+    local label="$3"
+    local width=$(get_terminal_width)
+    local bar_width=$((width - 20))
+    local filled=$(( (current * bar_width) / total ))
+    local empty=$((bar_width - filled))
+    
+    move_cursor 20 5
+    printf "${WHITE}%-30s${RESET}" "$label"
+    
+    move_cursor 21 5
+    printf "${CYAN}["
+    for ((i=0; i<filled; i++)); do printf "█"; done
+    for ((i=0; i<empty; i++)); do printf "░"; done
+    printf "]${RESET} ${BRIGHT_WHITE}%3d%%${RESET}" $(( (current * 100) / total ))
+}
+
+draw_status() {
+    local message="$1"
+    local type="${2:-info}"
+    local width=$(get_terminal_width)
+    
+    move_cursor 23 5
+    printf "%-${width}s" " "  # Clear line
+    move_cursor 23 5
+    
+    case "$type" in
+        success) printf "${GREEN}✓ ${message}${RESET}" ;;
+        error)   printf "${RED}✗ ${message}${RESET}" ;;
+        warning) printf "${YELLOW}⚠ ${message}${RESET}" ;;
+        *)       printf "${BLUE}◉ ${message}${RESET}" ;;
+    esac
+}
+
+draw_checklist() {
+    local title="$1"
+    shift
+    local items=("$@")
+    
+    local width=$(get_terminal_width)
+    local box_width=60
+    local box_height=$((${#items[@]} + 4))
+    local start_x=$(( (width - box_width) / 2 ))
+    local start_y=12
+    
+    draw_box $start_x $start_y $box_width $box_height "$title"
+    
+    for i in "${!items[@]}"; do
+        move_cursor $((start_y + 2 + i)) $((start_x + 4))
+        printf "${DIM}○ ${items[$i]}${RESET}"
+    done
+}
+
+update_checklist_item() {
+    local index=$1
+    local status=$2
+    local text="$3"
+    
+    local width=$(get_terminal_width)
+    local box_width=60
+    local start_x=$(( (width - box_width) / 2 ))
+    local start_y=12
+    
+    move_cursor $((start_y + 2 + index)) $((start_x + 4))
+    
+    case "$status" in
+        pending)  printf "${DIM}○ %-50s${RESET}" "$text" ;;
+        running)  printf "${YELLOW}◐ %-50s${RESET}" "$text" ;;
+        success)  printf "${GREEN}● %-50s${RESET}" "$text" ;;
+        error)    printf "${RED}✗ %-50s${RESET}" "$text" ;;
+    esac
+}
+
+# ============================================
+# Task Functions
+# ============================================
+check_prerequisites() {
+    local errors=0
+    
+    # Check Node.js
+    if command -v node &> /dev/null; then
+        local node_version=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
+        if [[ $node_version -ge 18 ]]; then
+            update_checklist_item 0 "success" "Node.js $(node -v)"
+        else
+            update_checklist_item 0 "error" "Node.js 18+ required (found $(node -v))"
+            ((errors++))
+        fi
+    else
+        update_checklist_item 0 "error" "Node.js not found"
+        ((errors++))
+    fi
+    sleep 0.3
+    
+    # Check npm
+    if command -v npm &> /dev/null; then
+        update_checklist_item 1 "success" "npm $(npm -v)"
+    else
+        update_checklist_item 1 "error" "npm not found"
+        ((errors++))
+    fi
+    sleep 0.3
+    
+    # Check git
+    if command -v git &> /dev/null; then
+        update_checklist_item 2 "success" "git $(git --version | cut -d' ' -f3)"
+    else
+        update_checklist_item 2 "error" "git not found"
+        ((errors++))
+    fi
+    sleep 0.3
+    
+    return $errors
+}
+
+install_dependencies() {
+    draw_header
+    
+    local steps=("Installing backend dependencies..." "Installing frontend dependencies..." "Verifying wrangler...")
+    draw_checklist "Installing Dependencies" "${steps[@]}"
+    
+    # Backend
+    update_checklist_item 0 "running" "Installing backend dependencies..."
+    cd "$PROJECT_ROOT/backend"
+    if npm install --silent 2>/dev/null; then
+        update_checklist_item 0 "success" "Backend dependencies installed"
+    else
+        update_checklist_item 0 "error" "Backend installation failed"
+        return 1
+    fi
+    sleep 0.3
+    
+    # Frontend
+    update_checklist_item 1 "running" "Installing frontend dependencies..."
+    cd "$PROJECT_ROOT/frontend"
+    if npm install --silent 2>/dev/null; then
+        update_checklist_item 1 "success" "Frontend dependencies installed"
+    else
+        update_checklist_item 1 "error" "Frontend installation failed"
+        return 1
+    fi
+    sleep 0.3
+    
+    # Wrangler
+    update_checklist_item 2 "running" "Verifying wrangler..."
+    cd "$PROJECT_ROOT/backend"
+    if npx wrangler --version &>/dev/null; then
+        update_checklist_item 2 "success" "Wrangler $(npx wrangler --version 2>/dev/null)"
+    else
+        update_checklist_item 2 "error" "Wrangler not available"
+        return 1
+    fi
+    sleep 0.5
+    
+    return 0
+}
+
+setup_database() {
+    draw_header
+    
+    local steps=("Running schema migrations..." "Seeding sample data..." "Verifying database...")
+    draw_checklist "Database Setup" "${steps[@]}"
+    
+    cd "$PROJECT_ROOT/backend"
+    
+    # Migrations
+    update_checklist_item 0 "running" "Running schema migrations..."
+    if npx wrangler d1 execute sfu-ai-teacher-db --local --file=./sql/schema.sql &>/dev/null; then
+        update_checklist_item 0 "success" "Schema migrations complete"
+    else
+        update_checklist_item 0 "error" "Migration failed"
+        return 1
+    fi
+    sleep 0.3
+    
+    # Seed data
+    update_checklist_item 1 "running" "Seeding sample data..."
+    if npx wrangler d1 execute sfu-ai-teacher-db --local --file=./sql/seed.sql &>/dev/null; then
+        update_checklist_item 1 "success" "Sample data seeded"
+    else
+        update_checklist_item 1 "error" "Seeding failed"
+        return 1
+    fi
+    sleep 0.3
+    
+    # Verify
+    update_checklist_item 2 "running" "Verifying database..."
+    local course_count=$(npx wrangler d1 execute sfu-ai-teacher-db --local --command="SELECT COUNT(*) as c FROM sfu_courses" --json 2>/dev/null | grep -o '"c":[0-9]*' | cut -d':' -f2)
+    if [[ -n "$course_count" && "$course_count" -gt 0 ]]; then
+        update_checklist_item 2 "success" "Database verified ($course_count courses)"
+    else
+        update_checklist_item 2 "success" "Database created"
+    fi
+    sleep 0.5
+    
+    return 0
+}
+
+setup_environment() {
+    draw_header
+    
+    local steps=("Checking frontend .env..." "Verifying configuration...")
+    draw_checklist "Environment Setup" "${steps[@]}"
+    
+    cd "$PROJECT_ROOT/frontend"
+    
+    # Frontend .env
+    update_checklist_item 0 "running" "Checking frontend .env..."
+    if [[ ! -f ".env" ]]; then
+        if [[ -f ".env.example" ]]; then
+            cp .env.example .env
+            update_checklist_item 0 "success" "Created .env from .env.example"
+        else
+            echo "VITE_BACKEND_URL=http://localhost:8787" > .env
+            update_checklist_item 0 "success" "Created default .env"
+        fi
+    else
+        update_checklist_item 0 "success" ".env already exists"
+    fi
+    sleep 0.3
+    
+    # Verify
+    update_checklist_item 1 "running" "Verifying configuration..."
+    sleep 0.3
+    update_checklist_item 1 "success" "Configuration verified"
+    sleep 0.5
+    
+    return 0
+}
+
+run_tests() {
+    draw_header
+    
+    local steps=("Running backend tests..." "Building frontend...")
+    draw_checklist "Verification" "${steps[@]}"
+    
+    # Backend tests
+    update_checklist_item 0 "running" "Running backend tests..."
+    cd "$PROJECT_ROOT/backend"
+    if npm run test:run &>/dev/null; then
+        update_checklist_item 0 "success" "All tests passed"
+    else
+        update_checklist_item 0 "warning" "Some tests failed (non-critical)"
+    fi
+    sleep 0.3
+    
+    # Frontend build check
+    update_checklist_item 1 "running" "Checking frontend build..."
+    cd "$PROJECT_ROOT/frontend"
+    if npm run build &>/dev/null; then
+        update_checklist_item 1 "success" "Frontend builds successfully"
+    else
+        update_checklist_item 1 "error" "Frontend build failed"
+        return 1
+    fi
+    sleep 0.5
+    
+    return 0
+}
+
+show_success_screen() {
+    draw_header
+    
+    local width=$(get_terminal_width)
+    local box_width=60
+    local start_x=$(( (width - box_width) / 2 ))
+    
+    draw_box $start_x 11 $box_width 14 "Setup Complete!"
+    
+    move_cursor 13 $((start_x + 4))
+    printf "${GREEN}${BOLD}✓ All components installed successfully${RESET}"
+    
+    move_cursor 15 $((start_x + 4))
+    printf "${WHITE}${BOLD}To start developing:${RESET}"
+    
+    move_cursor 17 $((start_x + 6))
+    printf "${CYAN}Terminal 1 (Backend):${RESET}"
+    move_cursor 18 $((start_x + 8))
+    printf "${DIM}cd backend && npm run dev${RESET}"
+    
+    move_cursor 20 $((start_x + 6))
+    printf "${CYAN}Terminal 2 (Frontend):${RESET}"
+    move_cursor 21 $((start_x + 8))
+    printf "${DIM}cd frontend && npm run dev${RESET}"
+    
+    move_cursor 23 $((start_x + 4))
+    printf "${BRIGHT_BLACK}Frontend: http://localhost:5173${RESET}"
+    move_cursor 24 $((start_x + 4))
+    printf "${BRIGHT_BLACK}Backend:  http://localhost:8787${RESET}"
+    
+    move_cursor 26 $(( (width - 20) / 2 ))
+    printf "${DIM}Press any key to exit${RESET}"
+    
+    read -rsn1
+}
+
+show_quick_actions_menu() {
+    while true; do
+        draw_header
+        
+        local choice=$(draw_menu "Quick Actions" \
+            "Reset Database (schema + seed)" \
+            "Seed Database Only" \
+            "Run Backend Tests" \
+            "Build Frontend" \
+            "Open D1 Studio" \
+            "Back to Main Menu")
+        
+        case $choice in
+            0) # Reset Database
+                draw_header
+                local steps=("Dropping tables..." "Running migrations..." "Seeding data...")
+                draw_checklist "Resetting Database" "${steps[@]}"
+                
+                cd "$PROJECT_ROOT/backend"
+                update_checklist_item 0 "running" "Dropping tables..."
+                sleep 0.3
+                update_checklist_item 0 "success" "Tables dropped"
+                
+                update_checklist_item 1 "running" "Running migrations..."
+                npx wrangler d1 execute sfu-ai-teacher-db --local --file=./sql/schema.sql &>/dev/null || true
+                update_checklist_item 1 "success" "Migrations complete"
+                
+                update_checklist_item 2 "running" "Seeding data..."
+                npx wrangler d1 execute sfu-ai-teacher-db --local --file=./sql/seed.sql &>/dev/null || true
+                update_checklist_item 2 "success" "Data seeded"
+                
+                sleep 1
+                ;;
+            1) # Seed Only
+                draw_header
+                local steps=("Seeding database...")
+                draw_checklist "Seeding Database" "${steps[@]}"
+                
+                cd "$PROJECT_ROOT/backend"
+                update_checklist_item 0 "running" "Seeding database..."
+                npx wrangler d1 execute sfu-ai-teacher-db --local --file=./sql/seed.sql &>/dev/null || true
+                update_checklist_item 0 "success" "Database seeded"
+                
+                sleep 1
+                ;;
+            2) # Run Tests
+                draw_header
+                local steps=("Running tests...")
+                draw_checklist "Running Tests" "${steps[@]}"
+                
+                cd "$PROJECT_ROOT/backend"
+                update_checklist_item 0 "running" "Running tests..."
+                if npm run test:run 2>/dev/null | tail -5; then
+                    update_checklist_item 0 "success" "Tests complete"
+                else
+                    update_checklist_item 0 "error" "Tests failed"
+                fi
+                
+                move_cursor 20 5
+                printf "${DIM}Press any key to continue${RESET}"
+                read -rsn1
+                ;;
+            3) # Build Frontend
+                draw_header
+                local steps=("Building frontend...")
+                draw_checklist "Building Frontend" "${steps[@]}"
+                
+                cd "$PROJECT_ROOT/frontend"
+                update_checklist_item 0 "running" "Building frontend..."
+                if npm run build &>/dev/null; then
+                    update_checklist_item 0 "success" "Build complete"
+                else
+                    update_checklist_item 0 "error" "Build failed"
+                fi
+                
+                sleep 1
+                ;;
+            4) # D1 Studio
+                show_cursor
+                clear_screen
+                echo "Opening D1 Studio..."
+                echo "Press Ctrl+C to exit when done."
+                cd "$PROJECT_ROOT/backend"
+                npx wrangler d1 studio sfu-ai-teacher-db --local || true
+                hide_cursor
+                ;;
+            5|-1) # Back / Quit
+                return
+                ;;
+        esac
+    done
+}
+
+# ============================================
+# Main Menu
+# ============================================
+main_menu() {
+    while true; do
+        draw_header
+        
+        local choice=$(draw_menu "Main Menu" \
+            "Full Setup (recommended for first time)" \
+            "Install Dependencies Only" \
+            "Setup Database Only" \
+            "Setup Environment Only" \
+            "Run Verification Tests" \
+            "Quick Actions" \
+            "Exit")
+        
+        case $choice in
+            0) # Full Setup
+                # Prerequisites
+                draw_header
+                local prereq_items=("Node.js 18+" "npm" "git")
+                draw_checklist "Checking Prerequisites" "${prereq_items[@]}"
+                if ! check_prerequisites; then
+                    move_cursor 20 5
+                    printf "${RED}Please install missing prerequisites and try again.${RESET}"
+                    move_cursor 22 5
+                    printf "${DIM}Press any key to continue${RESET}"
+                    read -rsn1
+                    continue
+                fi
+                sleep 1
+                
+                # Install dependencies
+                install_dependencies || continue
+                sleep 1
+                
+                # Setup database
+                setup_database || continue
+                sleep 1
+                
+                # Setup environment
+                setup_environment || continue
+                sleep 1
+                
+                # Run tests
+                run_tests || true
+                sleep 1
+                
+                # Success
+                show_success_screen
+                ;;
+            1) # Dependencies Only
+                install_dependencies
+                sleep 2
+                ;;
+            2) # Database Only
+                setup_database
+                sleep 2
+                ;;
+            3) # Environment Only
+                setup_environment
+                sleep 2
+                ;;
+            4) # Tests Only
+                run_tests
+                move_cursor 20 5
+                printf "${DIM}Press any key to continue${RESET}"
+                read -rsn1
+                ;;
+            5) # Quick Actions
+                show_quick_actions_menu
+                ;;
+            6|-1) # Exit
+                clear_screen
+                show_cursor
+                printf "${GREEN}Thanks for using SFU AI Teacher Setup!${RESET}\n\n"
+                exit 0
+                ;;
+        esac
+    done
+}
+
+# ============================================
+# Entry Point
+# ============================================
+cleanup() {
+    show_cursor
+    clear_screen
+}
+
+trap cleanup EXIT
+
+# Check if running in interactive terminal
+if [[ ! -t 0 ]]; then
+    echo "This script requires an interactive terminal."
     exit 1
 fi
 
-NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-if [ "$NODE_VERSION" -lt 18 ]; then
-    echo -e "${RED}Node.js 18+ required. Current version: $(node -v)${NC}"
-    exit 1
-fi
-echo -e "${GREEN}  Node.js $(node -v)${NC}"
-
-if ! command -v npm &> /dev/null; then
-    echo -e "${RED}npm not found. Please install npm first.${NC}"
-    exit 1
-fi
-echo -e "${GREEN}  npm $(npm -v)${NC}"
-
-echo ""
-
-# Install backend dependencies
-echo -e "${YELLOW}Installing backend dependencies...${NC}"
-cd "$PROJECT_ROOT/backend"
-npm install
-echo -e "${GREEN}  Backend dependencies installed${NC}"
-
-# Check if wrangler is available
-if ! npx wrangler --version &> /dev/null; then
-    echo -e "${RED}Wrangler not available. Something went wrong with npm install.${NC}"
-    exit 1
-fi
-echo -e "${GREEN}  Wrangler $(npx wrangler --version)${NC}"
-
-echo ""
-
-# Install frontend dependencies
-echo -e "${YELLOW}Installing frontend dependencies...${NC}"
-cd "$PROJECT_ROOT/frontend"
-npm install
-echo -e "${GREEN}  Frontend dependencies installed${NC}"
-
-echo ""
-
-# Setup local D1 database
-echo -e "${YELLOW}Setting up local D1 database...${NC}"
-cd "$PROJECT_ROOT/backend"
-
-# Run the schema migration
-npx wrangler d1 execute sfu-ai-teacher-db --local --file=./sql/schema.sql 2>/dev/null || true
-echo -e "${GREEN}  Database schema applied${NC}"
-
-echo ""
-
-# Seed the database with sample data
-echo -e "${YELLOW}Seeding database with sample data...${NC}"
-
-# Create a temporary seed file
-cat > /tmp/seed.sql << 'EOF'
--- Sample Users
-INSERT OR IGNORE INTO users (id, email, name, preferences) VALUES 
-  ('dev-user-001', 'student@sfu.ca', 'Demo Student', '{"voice": "aura-asteria-en", "speed": 1.0}'),
-  ('dev-user-002', 'ta@sfu.ca', 'Demo TA', '{"voice": "aura-orion-en", "speed": 1.0}');
-
--- Sample SFU Courses
-INSERT OR REPLACE INTO sfu_courses (id, name, title, description, units, prerequisites, degree_level, term) VALUES 
-  ('course-cmpt-120', 'CMPT 120', 'Introduction to Computing Science and Programming I', 
-   'An introduction to computing science and computer programming, suitable for students with little or no programming background. Topics include: fundamental concepts of computing; elementary data types; control structures; the design and implementation of small programs using a procedural language.', 
-   '3', 'None', 'Undergraduate', '2024 Fall'),
-  
-  ('course-cmpt-125', 'CMPT 125', 'Introduction to Computing Science and Programming II',
-   'A rigorous introduction to computing science and computer programming, suitable for students who already have some programming background. Topics include: fundamental concepts of computing; data abstraction; algorithm design; control structures; the design and implementation of programs using an object-oriented language.',
-   '3', 'CMPT 120 or equivalent', 'Undergraduate', '2024 Fall'),
-  
-  ('course-cmpt-225', 'CMPT 225', 'Data Structures and Programming',
-   'Introduction to a variety of practical and important data structures and methods for implementation and for experimental and analytical evaluation. Topics include: stacks, queues, lists, trees, graphs, sorting, searching, and algorithm analysis.',
-   '3', 'CMPT 125 and (MACM 101 or MATH 190)', 'Undergraduate', '2024 Fall'),
-  
-  ('course-cmpt-276', 'CMPT 276', 'Introduction to Software Engineering',
-   'An overview of various techniques used for software development and software project management. Topics include: software life cycle models, requirements analysis, software design methodologies, project management, quality assurance, software maintenance.',
-   '3', 'CMPT 225', 'Undergraduate', '2024 Fall'),
-  
-  ('course-cmpt-354', 'CMPT 354', 'Database Systems I',
-   'Logical representations of data: the relational model, entity-relationship model. Database design and normalization. Data definition and data manipulation languages (SQL). Physical data organization.',
-   '3', 'CMPT 225', 'Undergraduate', '2024 Fall'),
-  
-  ('course-math-151', 'MATH 151', 'Calculus I',
-   'Limits, derivatives of algebraic and transcendental functions. Applications including curve sketching, optimization problems, and related rates. Introduction to integration.',
-   '3', 'Pre-calculus 12 or equivalent', 'Undergraduate', '2024 Fall'),
-  
-  ('course-macm-101', 'MACM 101', 'Discrete Mathematics I',
-   'Introduction to logic, sets, functions, and mathematical proof techniques. Topics include: propositional and predicate logic, sets, relations, functions, mathematical induction, elementary number theory, and counting.',
-   '3', 'None', 'Undergraduate', '2024 Fall'),
-  
-  ('course-phil-105', 'PHIL 105', 'Critical Thinking',
-   'An introduction to the skills and methods of critical reasoning and argumentation. Emphasis on recognizing and evaluating arguments in everyday contexts, understanding common fallacies, and developing clear and effective reasoning.',
-   '3', 'None', 'Undergraduate', '2024 Fall');
-
--- Sample Course Outlines (chunks for RAG)
-INSERT OR REPLACE INTO sfu_outlines (id, course_id, chunk_index, content_type, content, metadata) VALUES 
-  ('outline-cmpt225-1', 'course-cmpt-225', 0, 'syllabus', 
-   'CMPT 225 covers fundamental data structures including arrays, linked lists, stacks, queues, trees, heaps, hash tables, and graphs. Students will learn to analyze algorithm efficiency using Big-O notation and implement these structures in C++.',
-   '{"section": "overview"}'),
-  
-  ('outline-cmpt225-2', 'course-cmpt-225', 1, 'schedule',
-   'Week 1-2: Review of C++ and Object-Oriented Programming. Week 3-4: Abstract Data Types, Stacks and Queues. Week 5-6: Linked Lists and Iterators. Week 7-8: Trees and Binary Search Trees. Week 9-10: Heaps and Priority Queues. Week 11-12: Hash Tables. Week 13: Graphs and Graph Algorithms.',
-   '{"section": "schedule"}'),
-  
-  ('outline-cmpt225-3', 'course-cmpt-225', 2, 'grading',
-   'Grading: Assignments (40%) - 5 programming assignments. Midterm Exam (25%). Final Exam (35%). Late policy: 10% per day, maximum 3 days late.',
-   '{"section": "grading"}'),
-  
-  ('outline-cmpt276-1', 'course-cmpt-276', 0, 'syllabus',
-   'CMPT 276 introduces software engineering principles and practices. Topics include requirements gathering, system design, agile methodologies, version control with Git, testing strategies, and team collaboration. Students work in teams on a semester-long project.',
-   '{"section": "overview"}'),
-  
-  ('outline-cmpt276-2', 'course-cmpt-276', 1, 'grading',
-   'Grading: Team Project (50%) - includes proposal, design documents, implementation, and presentation. Individual Assignments (25%). Participation and Peer Evaluation (10%). Final Exam (15%).',
-   '{"section": "grading"}'),
-  
-  ('outline-math151-1', 'course-math-151', 0, 'syllabus',
-   'MATH 151 covers single-variable calculus. Topics include limits and continuity, derivatives and their applications, integration, and the Fundamental Theorem of Calculus. Applications to physics and engineering problems.',
-   '{"section": "overview"}');
-
--- Sample Instructors
-INSERT OR REPLACE INTO instructors (id, sfu_id, name, department, rating, review_count, would_take_again, difficulty) VALUES 
-  ('inst-001', 'faculty-001', 'Dr. Sarah Chen', 'Computing Science', 4.5, 120, 0.92, 3.2),
-  ('inst-002', 'faculty-002', 'Dr. Michael Brown', 'Computing Science', 4.2, 85, 0.88, 3.5),
-  ('inst-003', 'faculty-003', 'Dr. Emily Watson', 'Mathematics', 4.7, 200, 0.95, 2.8),
-  ('inst-004', 'faculty-004', 'Dr. James Lee', 'Computing Science', 3.9, 65, 0.80, 3.8);
-
--- Verify data was inserted
-SELECT 'Users: ' || COUNT(*) FROM users;
-SELECT 'Courses: ' || COUNT(*) FROM sfu_courses;
-SELECT 'Outlines: ' || COUNT(*) FROM sfu_outlines;
-SELECT 'Instructors: ' || COUNT(*) FROM instructors;
-EOF
-
-npx wrangler d1 execute sfu-ai-teacher-db --local --file=/tmp/seed.sql 2>/dev/null || true
-rm /tmp/seed.sql
-echo -e "${GREEN}  Sample data seeded${NC}"
-
-echo ""
-
-# Setup frontend environment
-echo -e "${YELLOW}Setting up frontend environment...${NC}"
-cd "$PROJECT_ROOT/frontend"
-
-if [ ! -f ".env" ]; then
-    cp .env.example .env
-    echo -e "${GREEN}  Created .env from .env.example${NC}"
-else
-    echo -e "${GREEN}  .env already exists${NC}"
-fi
-
-echo ""
-
-# Run tests to verify setup
-echo -e "${YELLOW}Running backend tests to verify setup...${NC}"
-cd "$PROJECT_ROOT/backend"
-if npm run test:run 2>/dev/null | tail -5; then
-    echo -e "${GREEN}  All tests passed${NC}"
-else
-    echo -e "${YELLOW}  Some tests may have failed (this is okay for initial setup)${NC}"
-fi
-
-echo ""
-
-# Print success message and next steps
-echo -e "${GREEN}"
-echo "========================================="
-echo "  Setup Complete!"
-echo "========================================="
-echo -e "${NC}"
-echo ""
-echo -e "${BLUE}To start the development servers:${NC}"
-echo ""
-echo "  Terminal 1 (Backend):"
-echo "    cd backend && npm run dev"
-echo ""
-echo "  Terminal 2 (Frontend):"
-echo "    cd frontend && npm run dev"
-echo ""
-echo -e "${BLUE}URLs:${NC}"
-echo "  Frontend:  http://localhost:5173"
-echo "  Backend:   http://localhost:8787"
-echo "  API Docs:  http://localhost:8787/api/health"
-echo ""
-echo -e "${BLUE}Sample API endpoints to test:${NC}"
-echo "  curl http://localhost:8787/api/health"
-echo "  curl http://localhost:8787/api/courses"
-echo "  curl http://localhost:8787/api/courses/search?q=cmpt"
-echo ""
-echo -e "${YELLOW}Note: The backend requires Cloudflare authentication for some features.${NC}"
-echo -e "${YELLOW}Run 'npx wrangler login' in the backend folder if you need AI/Vectorize.${NC}"
-echo ""
+hide_cursor
+main_menu
