@@ -55,17 +55,47 @@ async function searchBackendAPI(params: {
   limit?: number;
 }): Promise<BackendSearchResult> {
   try {
+    // Try the advanced search endpoint first (POST)
     const response = await fetch(`${BACKEND_API_URL}/api/courses/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
     });
 
-    if (!response.ok) {
-      throw new Error(`Backend API error: ${response.status}`);
+    if (response.ok) {
+      return await response.json() as BackendSearchResult;
     }
 
-    return await response.json() as BackendSearchResult;
+    // Fallback: If searching by courseCode, try the direct endpoint GET /api/courses/:name
+    if (params.courseCode && response.status === 404) {
+      const encoded = encodeURIComponent(normalizeCourseCode(params.courseCode));
+      const fallbackResponse = await fetch(`${BACKEND_API_URL}/api/courses/${encoded}`);
+      
+      if (fallbackResponse.ok) {
+        const data = await fallbackResponse.json() as { course: BackendSearchResult['courses'][0] | null };
+        if (data.course) {
+          return {
+            courses: [{
+              name: data.course.name,
+              title: data.course.title,
+              description: data.course.description,
+              units: data.course.units,
+              prerequisites: data.course.prerequisites,
+              corequisites: data.course.corequisites,
+              instructors: data.course.instructors,
+              degree_level: data.course.degree_level,
+              delivery_method: data.course.delivery_method,
+              term: data.course.term,
+              relevance: 1.0,
+            }],
+            total: 1,
+            query: params,
+          };
+        }
+      }
+    }
+
+    throw new Error(`Backend API error: ${response.status}`);
   } catch (error) {
     console.error('Backend API search failed:', error);
     throw error;
