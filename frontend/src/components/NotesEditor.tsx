@@ -264,6 +264,11 @@ function AIResponseBlockContent({ block, editor }: AIResponseBlockContentProps) 
   
   const { prompt, response, toolType, isLoading } = block.props;
   
+  // Dismiss/delete the block
+  const handleDismiss = useCallback(() => {
+    editor.removeBlocks([block.id]);
+  }, [block.id, editor]);
+  
   // Run the AI request on mount if no response yet
   useEffect(() => {
     if (hasRun.current || response || !prompt) return;
@@ -349,8 +354,8 @@ function AIResponseBlockContent({ block, editor }: AIResponseBlockContentProps) 
         // Insert the parsed blocks after this AI response block
         editor.insertBlocks(blocks, block.id, 'after');
         
-        // For critique, explain, and suggest, remove the AI block after adding to notes
-        if (toolType === 'critique' || toolType === 'explain' || toolType === 'suggest') {
+        // For critique, explain, suggest, and formulas, remove the AI block after adding to notes
+        if (toolType === 'critique' || toolType === 'explain' || toolType === 'suggest' || toolType === 'formulas') {
           // Small delay to ensure blocks are inserted first
           setTimeout(() => {
             editor.removeBlocks([block.id]);
@@ -371,7 +376,7 @@ function AIResponseBlockContent({ block, editor }: AIResponseBlockContentProps) 
       
       if (fallbackBlocks.length > 0) {
         editor.insertBlocks(fallbackBlocks, block.id, 'after');
-        if (toolType === 'critique' || toolType === 'explain' || toolType === 'suggest') {
+        if (toolType === 'critique' || toolType === 'explain' || toolType === 'suggest' || toolType === 'formulas') {
           setTimeout(() => {
             editor.removeBlocks([block.id]);
           }, 100);
@@ -462,6 +467,13 @@ function AIResponseBlockContent({ block, editor }: AIResponseBlockContentProps) 
             ) : (
               <Copy className="h-3 w-3 text-muted-foreground" />
             )}
+          </button>
+          <button
+            onClick={handleDismiss}
+            className="p-1 hover:bg-red-500/20 rounded transition-colors"
+            title="Dismiss"
+          >
+            <X className="h-3 w-3 text-muted-foreground" />
           </button>
         </div>
       </div>
@@ -562,6 +574,10 @@ function AIInputBlockContent({ block, editor }: AIInputBlockContentProps) {
   
   const toolLabel = toolType === 'ask' ? 'Ask AI' : toolType === 'explain' ? 'Explain' : toolType === 'formulas' ? 'Get Formulas' : 'AI';
   
+  const handleDismiss = useCallback(() => {
+    editor.removeBlocks([block.id]);
+  }, [block.id, editor]);
+  
   return (
     <div className="my-2 rounded-lg border border-primary/30 bg-primary/5 overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2">
@@ -577,6 +593,13 @@ function AIInputBlockContent({ block, editor }: AIInputBlockContentProps) {
           className="flex-1 bg-transparent border-0 outline-none text-sm placeholder:text-muted-foreground/50"
         />
         <span className="text-xs text-muted-foreground/50 flex-shrink-0">Enter to submit</span>
+        <button
+          onClick={handleDismiss}
+          className="p-1 hover:bg-red-500/20 rounded transition-colors flex-shrink-0"
+          title="Cancel"
+        >
+          <X className="h-3 w-3 text-muted-foreground" />
+        </button>
       </div>
     </div>
   );
@@ -1517,7 +1540,7 @@ const NotesEditorInner = forwardRef<NotesEditorHandle, NotesEditorProps>(
           triggerCharacter="/"
           getItems={async (query) =>
             filterSuggestionItems(
-              getNotesSlashMenuItems(editor),
+              getNotesSlashMenuItems(editor, sectionTitle),
               query
             )
           }

@@ -61,11 +61,10 @@ const getEditorContent = (editor: unknown): string => {
  * AI commands use inline input - user types the query after the command:
  * - /Ask What is a heap? 
  * - /Explain binary search trees
- * - /Formulas calculus derivatives
  * 
- * /Critique uses the current notes content automatically
+ * /Critique, /Formulas, and /Suggest use context automatically
  */
-export function getNotesSlashMenuItems(editor: unknown): DefaultReactSuggestionItem[] {
+export function getNotesSlashMenuItems(editor: unknown, sectionTitle?: string): DefaultReactSuggestionItem[] {
   const defaults = getDefaultReactSlashMenuItems(
     editor as unknown as Parameters<typeof getDefaultReactSlashMenuItems>[0]
   ).filter((item) => (item as { key?: string }).key !== 'emoji');
@@ -145,15 +144,23 @@ export function getNotesSlashMenuItems(editor: unknown): DefaultReactSuggestionI
   const formulasItem: DefaultReactSuggestionItem = {
     title: 'Get Formulas',
     onItemClick: () => {
-      insert(editor, 'aiInput', { 
+      // Use section title and notes content to determine topic for formulas
+      const notes = getEditorContent(editor);
+      const topic = sectionTitle || 'current topic';
+      const context = notes ? `${topic}\n\nNotes context:\n${notes}` : topic;
+      
+      // Insert aiResponse block that will auto-generate formulas
+      insert(editor, 'aiResponse', { 
+        prompt: context,
+        response: '',
         toolType: 'formulas',
-        placeholder: 'Topic for formulas...',
+        isLoading: true,
       });
     },
     aliases: ['formulas', 'equations', 'getformulas'],
     group: 'AI Tools',
     icon: <FunctionSquare size={18} />,
-    subtext: 'Get relevant formulas',
+    subtext: 'Get relevant formulas for this section',
   };
 
   const suggestItem: DefaultReactSuggestionItem = {
