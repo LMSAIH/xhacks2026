@@ -115,6 +115,79 @@ app.get('/api/voices', (c) => {
   return c.json({ voices });
 });
 
+// Voice sample texts for preview
+const VOICE_SAMPLES: Record<string, string> = {
+  'aura-asteria-en': "Hi there! I'm Asteria, and I'll be your tutor today. Let's explore this topic together and make learning enjoyable.",
+  'aura-luna-en': "Hello. I'm Luna, and I'm here to guide you through your studies in a calm, relaxed way. Take your time.",
+  'aura-athena-en': "Good day. I'm Athena. I'll provide you with clear, confident explanations to help you master this material.",
+  'aura-hera-en': "Welcome. I am Hera. With years of wisdom to share, I'll help you understand even the most complex topics.",
+  'aura-orion-en': "Hey there. I'm Orion. I specialize in technical subjects and will break down complex concepts for you.",
+  'aura-arcas-en': "What's up! I'm Arcas, and I'm super excited to learn with you today! Let's dive right in!",
+  'aura-perseus-en': "Hello friend! I'm Perseus. I'm here to help you learn in a warm, supportive environment.",
+  'aura-angus-en': "Good afternoon. I'm Angus. Allow me to guide you through this subject with proper attention to detail.",
+  'aura-orpheus-en': "Greetings, learner. I'm Orpheus. Let me tell you a story about what we're going to explore today.",
+  'aura-helios-en': "Hello and welcome. I'm Helios. I'll deliver clear, precise information to help you succeed.",
+  'aura-zeus-en': "Welcome, student! I am Zeus. Together, we shall conquer this subject and achieve greatness!",
+};
+
+// Generate TTS preview for a voice
+app.get('/api/voices/:voiceId/preview', async (c) => {
+  const voiceId = c.req.param('voiceId');
+  
+  // Validate voice ID
+  if (!VOICES[voiceId as keyof typeof VOICES]) {
+    return c.json({ success: false, error: 'Invalid voice ID' }, 400);
+  }
+
+  // Check KV cache first
+  const cacheKey = `voice-preview:${voiceId}`;
+  const cached = await c.env.KV.get(cacheKey, 'arrayBuffer');
+  if (cached) {
+    return new Response(cached, {
+      headers: {
+        'Content-Type': 'audio/wav',
+        'Cache-Control': 'public, max-age=86400',
+      },
+    });
+  }
+
+  // Get sample text for this voice
+  const sampleText = VOICE_SAMPLES[voiceId] || "Hello! I'm your AI tutor. Let's start learning together.";
+
+  try {
+    // Generate TTS using Workers AI
+    // @ts-expect-error - model exists in Workers AI
+    const ttsResult = await c.env.AI.run(`@cf/deepgram/${voiceId}`, {
+      text: sampleText,
+    }) as Uint8Array | { audio: Uint8Array };
+
+    let audioBytes: Uint8Array;
+    if (ttsResult instanceof Uint8Array) {
+      audioBytes = ttsResult;
+    } else if (ttsResult && 'audio' in ttsResult) {
+      audioBytes = ttsResult.audio;
+    } else {
+      return c.json({ success: false, error: 'TTS generation failed' }, 500);
+    }
+
+    // Cache the result for 24 hours
+    await c.env.KV.put(cacheKey, audioBytes, { expirationTtl: 86400 });
+
+    return new Response(audioBytes, {
+      headers: {
+        'Content-Type': 'audio/wav',
+        'Cache-Control': 'public, max-age=86400',
+      },
+    });
+  } catch (error) {
+    console.error('TTS preview error:', error);
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'TTS generation failed' 
+    }, 500);
+  }
+});
+
 // Combined config endpoint for frontend initialization
 app.get('/api/config', (c) => {
   const voices = Object.values(VOICES).map(v => ({
