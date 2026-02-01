@@ -9,6 +9,8 @@ export interface Env {
   KV: KVNamespace;
   VECTORIZE: VectorizeIndex;
   VOICE_SESSION: DurableObjectNamespace;
+  OPENAI_API_KEY?: string;
+  SFU_API_BASE_URL?: string;
 }
 
 // Voice states

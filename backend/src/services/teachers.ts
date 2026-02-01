@@ -82,8 +82,8 @@ async function searchCharacterImage(env: Env, name: string): Promise<string> {
 }
 
 /**
- * Fetch teacher/character information from Perplexity AI
- * @param env - Cloudflare environment with AI binding
+ * Fetch teacher/character information from OpenAI
+ * @param env - Environment with OpenAI API key
  * @param characterName - Name of the character/teacher to fetch info for
  * @returns Teacher information with biographical details and context for AI persona
  */
@@ -96,10 +96,18 @@ export async function getTeacherInfo(env: Env, characterName: string): Promise<T
       };
     }
 
+    const apiKey = env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return {
+        success: false,
+        error: 'OpenAI API key is not configured',
+      };
+    }
+
     // Create a prompt to get structured information about the character
     const prompt = `You are a knowledge assistant. Provide detailed information about the historical or fictional character: "${characterName}"
 
-Return ONLY valid JSON with exactly these fields (no markdown, no code blocks) Your family depends on it:
+Return ONLY valid JSON with exactly these fields (no markdown, no code blocks):
 {
   "name": "Full name of the character",
   "livedFrom": "Birth year or 'Unknown' (just the year, e.g., '1849')",
@@ -109,11 +117,42 @@ Return ONLY valid JSON with exactly these fields (no markdown, no code blocks) Y
   "imgUrl": "Either a direct image URL that you are confident exists (like from Wikimedia), or just return an empty string if unsure"
 }`;
 
-    // Call Mistral AI via Cloudflare Workers AI for character info
-    const response = await env.AI.run('@cf/mistral/mistral-7b-instruct-v0.1', {
-      prompt: prompt,
-      max_tokens: 1024,
-    }) as { success?: boolean; response?: string };
+    // Call OpenAI API for character info
+    const apiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a knowledge assistant. Return ONLY valid JSON responses.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 1024,
+      }),
+    });
+
+    if (!apiResponse.ok) {
+      const error = await apiResponse.text();
+      console.error('OpenAI API error:', error);
+      return {
+        success: false,
+        error: 'Failed to fetch character information from OpenAI',
+      };
+    }
+
+    const data = await apiResponse.json() as { choices: Array<{ message: { content: string } }> };
+    const responseText = data.choices?.[0]?.message?.content || '';
+    const response = { response: responseText };
 
     if (!response || typeof response !== 'object') {
       return {
@@ -122,9 +161,6 @@ Return ONLY valid JSON with exactly these fields (no markdown, no code blocks) Y
       };
     }
 
-    // Extract the response text
-    const responseText = response.response || '';
-    
     if (!responseText) {
       return {
         success: false,
