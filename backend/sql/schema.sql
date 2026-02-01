@@ -19,27 +19,15 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 -- ============================================
 -- SFU Courses Table (Cached Metadata)
 -- ============================================
-CREATE TABLE IF NOT EXISTS sfu_courses (
+DROP TABLE IF EXISTS sfu_courses;
+CREATE TABLE sfu_courses (
   id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-  course_code TEXT NOT NULL,           -- e.g., "CMPT 225"
-  term TEXT NOT NULL,                  -- e.g., "1251" (Spring 2025)
-  title TEXT NOT NULL,
+  name TEXT NOT NULL UNIQUE,   -- Combined "DEPT NUMBER" e.g., "CMPT 225"
   description TEXT,
-  units INTEGER,
-  prerequisites TEXT,                  -- JSON array
-  corequisites TEXT,                   -- JSON array
-  department TEXT,
-  faculty TEXT,
-  instructors TEXT,                    -- JSON array
-  schedule TEXT,                       -- JSON object
-  raw_data TEXT,                       -- Full API response
-  synced_at TEXT DEFAULT (datetime('now')),
-  UNIQUE(course_code, term)
+  created_at TEXT DEFAULT (datetime('now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_courses_code ON sfu_courses(course_code);
-CREATE INDEX IF NOT EXISTS idx_courses_term ON sfu_courses(term);
-CREATE INDEX IF NOT EXISTS idx_courses_dept ON sfu_courses(department);
+CREATE INDEX IF NOT EXISTS idx_courses_name ON sfu_courses(name);
 
 -- ============================================
 -- SFU Outlines Table (Chunked Content for RAG)
