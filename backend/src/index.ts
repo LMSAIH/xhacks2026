@@ -130,8 +130,11 @@ const VOICE_SAMPLES: Record<string, string> = {
   'aura-zeus-en': "Welcome, student! I am Zeus. Together, we shall conquer this subject and achieve greatness!",
 };
 
+// Deepgram Aura speaker names (must match Cloudflare Workers AI types)
+type DeepgramSpeaker = 'asteria' | 'luna' | 'athena' | 'hera' | 'orion' | 'arcas' | 'perseus' | 'angus' | 'orpheus' | 'helios' | 'zeus' | 'stella';
+
 // Map voice IDs to Deepgram Aura speaker names
-const VOICE_TO_SPEAKER: Record<string, string> = {
+const VOICE_TO_SPEAKER: Record<string, DeepgramSpeaker> = {
   'aura-asteria-en': 'asteria',
   'aura-luna-en': 'luna',
   'aura-athena-en': 'athena',
@@ -168,46 +171,20 @@ app.get('/api/voices/:voiceId/preview', async (c) => {
 
   // Get sample text and speaker name for this voice
   const sampleText = VOICE_SAMPLES[voiceId] || "Hello! I'm your AI tutor. Let's start learning together.";
-  const speaker = VOICE_TO_SPEAKER[voiceId] || 'angus';
+  const speaker: DeepgramSpeaker = VOICE_TO_SPEAKER[voiceId] ?? 'angus';
 
   try {
     // Generate TTS using Workers AI - Deepgram Aura model
-    // @ts-expect-error - model exists in Workers AI
+    // With returnRawResponse: true, we get a Response object
     const ttsResult = await c.env.AI.run('@cf/deepgram/aura-1', {
       text: sampleText,
       speaker: speaker,
     }, {
       returnRawResponse: true,
-    });
+    }) as Response;
 
-    // The result should be a Response with audio data
-    if (ttsResult instanceof Response) {
-      const audioBytes = await ttsResult.arrayBuffer();
-      
-      // Cache the result for 24 hours
-      await c.env.KV.put(cacheKey, audioBytes, { expirationTtl: 86400 });
-
-      return new Response(audioBytes, {
-        headers: {
-          'Content-Type': 'audio/mpeg',
-          'Cache-Control': 'public, max-age=86400',
-        },
-      });
-    }
-
-    // Fallback for other response formats
-    let audioBytes: ArrayBuffer;
-    if (ttsResult instanceof ArrayBuffer) {
-      audioBytes = ttsResult;
-    } else if (ttsResult instanceof Uint8Array) {
-      audioBytes = ttsResult.buffer as ArrayBuffer;
-    } else if (ttsResult && typeof ttsResult === 'object' && 'audio' in ttsResult) {
-      const audio = (ttsResult as { audio: Uint8Array }).audio;
-      audioBytes = audio.buffer as ArrayBuffer;
-    } else {
-      return c.json({ success: false, error: 'TTS generation failed - unexpected response format' }, 500);
-    }
-
+    const audioBytes = await ttsResult.arrayBuffer();
+    
     // Cache the result for 24 hours
     await c.env.KV.put(cacheKey, audioBytes, { expirationTtl: 86400 });
 

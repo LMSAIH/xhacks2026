@@ -6,7 +6,6 @@ import {
   getDefaultVoiceForCourse,
   buildSystemPrompt,
   VOICES,
-  DEEPGRAM_TTS_MODEL,
   getSpeakerName
 } from '../voices';
 
@@ -293,8 +292,7 @@ export class VoiceTeacherSession extends DurableObject<Env> {
 
       try {
         // Use Aura-1 model with speaker parameter
-        // @ts-expect-error - model exists in Workers AI
-        const ttsResult = await this.env.AI.run(DEEPGRAM_TTS_MODEL, {
+        const ttsResult = await this.env.AI.run('@cf/deepgram/aura-1', {
           text: sentence,
           speaker: speakerName,
         }, { returnRawResponse: true }) as Response;

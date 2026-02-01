@@ -109,8 +109,11 @@ export const VOICES: Record<DeepgramVoice, VoiceConfig> = {
 // Deepgram Aura-1 model ID (single model for all voices)
 export const DEEPGRAM_TTS_MODEL = '@cf/deepgram/aura-1';
 
+// Deepgram Aura speaker names (must match Cloudflare Workers AI types)
+export type DeepgramSpeaker = 'asteria' | 'luna' | 'athena' | 'hera' | 'orion' | 'arcas' | 'perseus' | 'angus' | 'orpheus' | 'helios' | 'zeus' | 'stella';
+
 // Map voice IDs to speaker names for Aura-1 API
-export const VOICE_TO_SPEAKER: Record<DeepgramVoice, string> = {
+export const VOICE_TO_SPEAKER: Record<DeepgramVoice, DeepgramSpeaker> = {
   'aura-asteria-en': 'asteria',
   'aura-luna-en': 'luna',
   'aura-athena-en': 'athena',
@@ -125,7 +128,7 @@ export const VOICE_TO_SPEAKER: Record<DeepgramVoice, string> = {
 };
 
 // Get speaker name for Aura-1 TTS API
-export function getSpeakerName(voice: DeepgramVoice): string {
+export function getSpeakerName(voice: DeepgramVoice): DeepgramSpeaker {
   return VOICE_TO_SPEAKER[voice] || 'asteria';
 }
 

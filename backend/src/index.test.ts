@@ -229,7 +229,11 @@ describe('SFU AI Teacher API', () => {
       env.KV.put = vi.fn().mockResolvedValue(undefined);
       
       const mockAudio = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00]);
-      env.AI.run = vi.fn().mockResolvedValue(mockAudio);
+      // Mock AI.run to return a Response object (since we use returnRawResponse: true)
+      const mockResponse = new Response(mockAudio, {
+        headers: { 'Content-Type': 'audio/mpeg' }
+      });
+      env.AI.run = vi.fn().mockResolvedValue(mockResponse);
 
       const req = new Request('http://localhost/api/voices/aura-orion-en/preview');
       const res = await app.fetch(req, env);
