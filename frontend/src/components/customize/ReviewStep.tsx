@@ -1,0 +1,351 @@
+import { useState, useMemo } from "react";
+import type { Character, Voice } from "./data";
+import {
+  StepTitle,
+  StepDescription,
+  SectionLabel,
+  CardTitle,
+  CardSubtitle,
+  CardDescription,
+  HelpText,
+} from "./Typography";
+import { BlurFade } from "@/components/ui/blur-fade";
+
+interface OutlineItem {
+  id: string;
+  number: string;
+  title: string;
+  children?: OutlineItem[];
+}
+
+interface ReviewStepProps {
+  topic: string;
+  character: Character | null;
+  customCharacter: string;
+  voice: Voice | null;
+  onBack: () => void;
+  onStart: () => void;
+}
+
+// Generate a course outline based on the topic
+function generateOutline(topic: string): OutlineItem[] {
+  // Simple outline generator based on common learning patterns
+  const topicLower = topic.toLowerCase();
+  
+  // Default structure that works for most topics
+  const baseOutline: OutlineItem[] = [
+    {
+      id: "1",
+      number: "1",
+      title: "Fundamentals",
+      children: [
+        { id: "1.1", number: "1.1", title: "Introduction & Overview" },
+        { id: "1.2", number: "1.2", title: "Key Concepts" },
+        { id: "1.3", number: "1.3", title: "Core Terminology" },
+      ],
+    },
+    {
+      id: "2",
+      number: "2",
+      title: "Core Principles",
+      children: [
+        { id: "2.1", number: "2.1", title: "Main Components" },
+        { id: "2.2", number: "2.2", title: "How It Works" },
+        { id: "2.3", number: "2.3", title: "Common Patterns" },
+      ],
+    },
+    {
+      id: "3",
+      number: "3",
+      title: "Practical Application",
+      children: [
+        { id: "3.1", number: "3.1", title: "Real-World Examples" },
+        { id: "3.2", number: "3.2", title: "Hands-On Exercise" },
+        { id: "3.3", number: "3.3", title: "Best Practices" },
+      ],
+    },
+    {
+      id: "4",
+      number: "4",
+      title: "Advanced Topics",
+      children: [
+        { id: "4.1", number: "4.1", title: "Deep Dive" },
+        { id: "4.2", number: "4.2", title: "Edge Cases" },
+      ],
+    },
+    {
+      id: "5",
+      number: "5",
+      title: "Summary & Next Steps",
+      children: [
+        { id: "5.1", number: "5.1", title: "Key Takeaways" },
+        { id: "5.2", number: "5.2", title: "Further Learning" },
+      ],
+    },
+  ];
+
+  // Customize based on topic keywords
+  if (topicLower.includes("programming") || topicLower.includes("code") || topicLower.includes("javascript") || topicLower.includes("python")) {
+    baseOutline[0].children = [
+      { id: "1.1", number: "1.1", title: "Syntax Basics" },
+      { id: "1.2", number: "1.2", title: "Variables & Data Types" },
+      { id: "1.3", number: "1.3", title: "Control Flow" },
+    ];
+    baseOutline[2].children = [
+      { id: "3.1", number: "3.1", title: "Code Examples" },
+      { id: "3.2", number: "3.2", title: "Debugging Tips" },
+      { id: "3.3", number: "3.3", title: "Project Structure" },
+    ];
+  } else if (topicLower.includes("math") || topicLower.includes("calculus") || topicLower.includes("algebra")) {
+    baseOutline[0].children = [
+      { id: "1.1", number: "1.1", title: "Prerequisites Review" },
+      { id: "1.2", number: "1.2", title: "Core Definitions" },
+      { id: "1.3", number: "1.3", title: "Notation Guide" },
+    ];
+    baseOutline[2].children = [
+      { id: "3.1", number: "3.1", title: "Worked Problems" },
+      { id: "3.2", number: "3.2", title: "Practice Exercises" },
+      { id: "3.3", number: "3.3", title: "Common Mistakes" },
+    ];
+  } else if (topicLower.includes("history") || topicLower.includes("war") || topicLower.includes("civilization")) {
+    baseOutline[0].children = [
+      { id: "1.1", number: "1.1", title: "Historical Context" },
+      { id: "1.2", number: "1.2", title: "Key Figures" },
+      { id: "1.3", number: "1.3", title: "Timeline Overview" },
+    ];
+    baseOutline[2].children = [
+      { id: "3.1", number: "3.1", title: "Primary Sources" },
+      { id: "3.2", number: "3.2", title: "Case Studies" },
+      { id: "3.3", number: "3.3", title: "Impact Analysis" },
+    ];
+  }
+
+  return baseOutline;
+}
+
+export function ReviewStep({
+  topic,
+  character,
+  customCharacter,
+  voice,
+  onBack,
+  onStart,
+}: ReviewStepProps) {
+  const tutorName = character?.name || customCharacter || "Custom Tutor";
+  const tutorDescription = character?.teachingStyle || "A personalized AI tutor";
+
+  // Generate outline based on topic
+  const initialOutline = useMemo(() => generateOutline(topic), [topic]);
+  const [outline, setOutline] = useState<OutlineItem[]>(initialOutline);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  const handleEditStart = (item: OutlineItem) => {
+    setEditingId(item.id);
+    setEditValue(item.title);
+  };
+
+  const handleEditSave = () => {
+    if (!editingId) return;
+    
+    setOutline(prev => {
+      const updateItem = (items: OutlineItem[]): OutlineItem[] => {
+        return items.map(item => {
+          if (item.id === editingId) {
+            return { ...item, title: editValue };
+          }
+          if (item.children) {
+            return { ...item, children: updateItem(item.children) };
+          }
+          return item;
+        });
+      };
+      return updateItem(prev);
+    });
+    setEditingId(null);
+    setEditValue("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleEditSave();
+    } else if (e.key === "Escape") {
+      setEditingId(null);
+      setEditValue("");
+    }
+  };
+
+  const renderOutlineItem = (item: OutlineItem, isChild = false) => {
+    const isEditing = editingId === item.id;
+    
+    return (
+      <div key={item.id} className={isChild ? "ml-6" : ""}>
+        <div 
+          className={`group flex items-center gap-2 py-1.5 px-2 -mx-2 rounded transition-colors hover:bg-muted/50 cursor-pointer ${
+            isChild ? "text-sm" : "font-medium"
+          }`}
+          onClick={() => !isEditing && handleEditStart(item)}
+        >
+          <span className={`font-mono shrink-0 ${isChild ? "text-muted-foreground text-xs w-8" : "text-xs w-6"}`}>
+            {item.number}
+          </span>
+          {isEditing ? (
+            <input
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleEditSave}
+              onKeyDown={handleKeyDown}
+              autoFocus
+              className="flex-1 bg-background border border-border px-2 py-0.5 text-sm focus:outline-none focus:border-foreground"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <>
+              <span className="flex-1 truncate">{item.title}</span>
+              <span className="text-muted-foreground text-xs opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                click to edit
+              </span>
+            </>
+          )}
+        </div>
+        {item.children && (
+          <div className="border-l border-border/50 ml-3">
+            {item.children.map(child => renderOutlineItem(child, true))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="p-6">
+      {/* Header */}
+      <BlurFade delay={0.1}>
+        <div className="mb-6 text-center">
+          <StepTitle className="mb-2">Ready to start learning?</StepTitle>
+          <StepDescription>Review your session setup and course outline</StepDescription>
+        </div>
+      </BlurFade>
+
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        {/* Left: Session Summary */}
+        <BlurFade delay={0.2}>
+          <div className="border border-border bg-muted/20 h-full">
+            {/* Topic */}
+            <div className="p-4 border-b border-border">
+              <SectionLabel className="mb-1">Topic</SectionLabel>
+              <CardTitle className="text-lg truncate">{topic}</CardTitle>
+            </div>
+
+            {/* Tutor */}
+            <div className="p-4 border-b border-border">
+              <SectionLabel className="mb-2">Your Tutor</SectionLabel>
+              <div className="flex items-start gap-3">
+                <img
+                  src={character?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(tutorName)}&background=1a1a1a&color=fff&size=128&font-size=0.4`}
+                  alt={tutorName}
+                  className="w-10 h-10 object-cover bg-muted shrink-0"
+                  onError={(e) => {
+                    e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(tutorName)}&background=1a1a1a&color=fff&size=128&font-size=0.4`;
+                  }}
+                />
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="truncate">{tutorName}</CardTitle>
+                  {character && (
+                    <CardSubtitle className="truncate">
+                      {character.title} • {character.era}
+                    </CardSubtitle>
+                  )}
+                  <CardDescription className="text-xs mt-1 line-clamp-2">
+                    {tutorDescription}
+                  </CardDescription>
+                </div>
+              </div>
+            </div>
+
+            {/* Voice */}
+            <div className="p-4">
+              <SectionLabel className="mb-2">Voice</SectionLabel>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-muted flex items-center justify-center text-sm shrink-0">
+                  🔊
+                </div>
+                <div className="min-w-0">
+                  <CardTitle className="truncate">{voice?.name || "Default"}</CardTitle>
+                  <CardSubtitle className="truncate">{voice?.description || "Standard voice"}</CardSubtitle>
+                </div>
+              </div>
+            </div>
+          </div>
+        </BlurFade>
+
+        {/* Right: Course Outline */}
+        <BlurFade delay={0.25}>
+          <div className="border border-border bg-muted/20 h-full flex flex-col">
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <div>
+                <SectionLabel className="mb-0.5">Course Outline</SectionLabel>
+                <HelpText className="text-xs">Auto-generated • Click to edit</HelpText>
+              </div>
+              <div className="text-xs text-muted-foreground bg-muted px-2 py-1">
+                {outline.length} sections
+              </div>
+            </div>
+            <div className="p-4 overflow-y-auto max-h-64 flex-1 scrollbar-thin">
+              <div className="space-y-1">
+                {outline.map(item => renderOutlineItem(item))}
+              </div>
+            </div>
+          </div>
+        </BlurFade>
+      </div>
+
+      {/* What to expect */}
+      <BlurFade delay={0.3}>
+        <div className="mb-6 p-4 bg-muted/30 border border-border">
+          <CardTitle className="mb-2">What happens next?</CardTitle>
+          <ul className="space-y-2">
+            <li className="flex items-start gap-2">
+              <span className="w-5 h-5 bg-foreground text-background flex items-center justify-center text-xs font-bold shrink-0">
+                1
+              </span>
+              <HelpText>You'll enter a voice conversation with your AI tutor</HelpText>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-5 h-5 bg-foreground text-background flex items-center justify-center text-xs font-bold shrink-0">
+                2
+              </span>
+              <HelpText>Speak naturally — ask questions or request explanations</HelpText>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-5 h-5 bg-foreground text-background flex items-center justify-center text-xs font-bold shrink-0">
+                3
+              </span>
+              <HelpText>Your tutor will guide you through the outline above</HelpText>
+            </li>
+          </ul>
+        </div>
+      </BlurFade>
+
+      {/* Navigation */}
+      <BlurFade delay={0.4}>
+        <div className="flex justify-between items-center border-t border-border pt-4 -mx-6 px-6 -mb-6 pb-6 bg-muted/20">
+          <button
+            onClick={onBack}
+            className="px-4 py-2.5 border border-border text-sm hover:border-foreground transition-colors"
+          >
+            ← Back
+          </button>
+          <button
+            onClick={onStart}
+            className="px-6 py-3 bg-foreground text-background font-semibold hover:bg-foreground/90 transition-colors"
+          >
+            Start Learning →
+          </button>
+        </div>
+      </BlurFade>
+    </div>
+  );
+}

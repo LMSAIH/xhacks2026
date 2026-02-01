@@ -1,11 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useRealtimeVoice } from '@/hooks/use-realtime-voice';
 import { VoiceVisualizer } from '@/components/voice-visualizer';
 import { TranscriptDisplay } from '@/components/transcript-display';
 import { ControlButtons } from '@/components/control-buttons';
 import { StatusIndicator } from '@/components/status-indicator';
 import { Card } from '@/components/ui/card';
-import { Settings, Sparkles, Loader2, BookOpen } from 'lucide-react';
+import { Settings, Sparkles, Loader2, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -19,25 +20,26 @@ interface TranscriptMessage {
 // Backend URL - points to the /api/voice/:courseCode endpoint
 const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'ws://localhost:8787';
 
-// Sample courses for demo
-const COURSES = [
-  { code: 'CMPT120', name: 'Introduction to Computing Science' },
-  { code: 'CMPT125', name: 'Introduction to Computing Science II' },
-  { code: 'CMPT225', name: 'Data Structures and Programming' },
-  { code: 'CMPT276', name: 'Introduction to Software Engineering' },
-  { code: 'CMPT310', name: 'Introduction to Artificial Intelligence' },
-];
-
 export function VoiceAgent() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Get topic from navigation state or default
+  const topicState = location.state as { topic?: string; context?: string; prerequisites?: string } | null;
+  const topic = topicState?.topic || 'General Learning';
+  const topicContext = topicState?.context || '';
+  
+  // Create a simple course code from the topic
+  const courseCode = topic.split(':')[0].replace(/\s+/g, '').toUpperCase().slice(0, 10) || 'GENERAL';
+
   const [messages, setMessages] = useState<TranscriptMessage[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState(COURSES[0]);
   const transcriptRef = useRef<HTMLDivElement>(null);
 
   // Build WebSocket URL with course code
-  const wsUrl = `${BACKEND_BASE}/api/voice/${selectedCourse.code}`;
+  const wsUrl = `${BACKEND_BASE}/api/voice/${courseCode}`;
 
   const handleTranscriptUpdate = useCallback((transcript: string, isUser: boolean) => {
     // Add to messages immediately
@@ -77,7 +79,7 @@ export function VoiceAgent() {
     interrupt,
   } = useRealtimeVoice({
     serverUrl: wsUrl,
-    courseCode: selectedCourse.code,
+    courseCode: courseCode,
     onTranscriptUpdate: handleTranscriptUpdate,
     onConnectionChange: handleConnectionChange,
     onError: handleError,
@@ -107,37 +109,32 @@ export function VoiceAgent() {
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 flex flex-col">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-border/50 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/30">
-            <BookOpen className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight">SFU AI Teacher</h1>
-            <p className="text-xs text-muted-foreground">Your AI tutor for SFU courses</p>
+        <div className="flex items-center gap-4">
+          {/* Back button */}
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-lg hover:bg-secondary transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/30">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight font-[family-name:var(--font-display)] line-clamp-1">
+                {topic}
+              </h1>
+              <p className="text-xs text-muted-foreground">AI Voice Tutor</p>
+            </div>
           </div>
         </div>
         
-        {/* Course Selector */}
+        {/* Status & Settings */}
         <div className="flex items-center gap-4">
-          <select
-            value={selectedCourse.code}
-            onChange={(e) => {
-              const course = COURSES.find(c => c.code === e.target.value);
-              if (course && !isConnected) {
-                setSelectedCourse(course);
-                setMessages([]);
-              }
-            }}
-            disabled={isConnected}
-            className="px-3 py-1.5 rounded-lg bg-secondary border border-border text-sm disabled:opacity-50"
-          >
-            {COURSES.map(course => (
-              <option key={course.code} value={course.code}>
-                {course.code} - {course.name}
-              </option>
-            ))}
-          </select>
-          
           <StatusIndicator
             isConnected={isConnected}
             isListening={isListening}
@@ -272,15 +269,17 @@ export function VoiceAgent() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6">
-              <h2 className="text-lg font-semibold mb-4">Settings</h2>
+              <h2 className="text-lg font-semibold mb-4 font-[family-name:var(--font-display)]">Settings</h2>
               
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">
-                    Current Course
+                    Current Topic
                   </label>
-                  <p className="mt-1 text-sm font-medium">{selectedCourse.code}</p>
-                  <p className="text-xs text-muted-foreground">{selectedCourse.name}</p>
+                  <p className="mt-1 text-sm font-medium">{topic}</p>
+                  {topicContext && (
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-3">{topicContext}</p>
+                  )}
                 </div>
 
                 <div>
@@ -299,7 +298,7 @@ export function VoiceAgent() {
                   <h3 className="text-sm font-medium mb-2">AI Stack (Cloudflare)</h3>
                   <ul className="text-xs text-muted-foreground space-y-1">
                     <li>• STT: Whisper (OpenAI)</li>
-                    <li>• LLM: Llama 3.2 3B Instruct</li>
+                    <li>• LLM: Llama 3.1 8B Instruct</li>
                     <li>• TTS: MeloTTS</li>
                   </ul>
                 </div>
