@@ -1,20 +1,21 @@
-# Learn LM
+# LearnLM
 
-A real-time voice-based AI tutoring platform. Pick a topic, have a spoken conversation with an AI tutor that uses course materials (RAG), with customizable voices and personas.
+An AI-powered tutoring platform with real-time voice conversations. Select a topic, choose an AI tutor character, and learn through natural spoken dialogue.
 
-![Voice Agent](https://img.shields.io/badge/AI-Voice%20Tutor-purple)
-![React](https://img.shields.io/badge/React-19-blue)
-![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-orange)
-![Hono](https://img.shields.io/badge/Hono-v4-green)
+**Live Demo**: [learn-lm.com](https://learn-lm.com)
 
-## Features
+## Overview
 
-- **Real-Time Voice Conversations**: Speak naturally with your AI tutor using Deepgram Whisper (STT) and Aura (TTS)
-- **Course Integration**: RAG-powered responses using real course outlines
-- **Interrupt Commands**: Say "Stop", "Wait", or "Hold on" to cancel TTS immediately
-- **Clarification Requests**: Say "What?" or "I don't understand" to get simpler explanations
-- **Progress Tracking**: Session history, transcripts, and learning progress saved to D1
-- **Ultra-Low Latency**: Durable Objects with WebSocket hibernation for persistent connections
+LearnLM enables personalized learning through AI tutors that adapt to your learning style. Features include voice-based tutoring, AI-generated course outlines, a notes editor with intelligent assistance, and integration with SFU course materials.
+
+## Key Features
+
+- **Voice Tutoring** - Natural spoken conversations with AI tutors using real-time speech-to-text and text-to-speech
+- **Custom AI Characters** - Learn from historical figures or create custom tutor personas
+- **Course Outlines** - AI-generated curriculum with streaming progressive rendering
+- **Notes Editor** - Rich text editor with slash commands and background critique
+- **RAG Integration** - Responses grounded in actual course materials
+- **SFU Courses** - Direct integration with 998 Simon Fraser University courses
 
 ## Quick Start
 
@@ -23,51 +24,12 @@ A real-time voice-based AI tutoring platform. Pick a topic, have a spoken conver
 - Node.js 18+
 - Cloudflare account (for deployment)
 
-### Interactive Setup (Recommended)
-
-Run the interactive TUI setup wizard:
+### Installation
 
 ```bash
-./scripts/TUI.sh
-```
-
-This will guide you through:
-- Installing dependencies (backend + frontend)
-- Setting up the local D1 database
-- Seeding sample data
-- Configuring environment files
-- Running verification tests
-
-```
- _                            _     __  __ 
-| |    ___  __ _ _ __ _ __   | |   |  \/  |
-| |   / _ \/ _` | '__| '_ \  | |   | |\/| |
-| |__|  __/ (_| | |  | | | | | |___| |  | |
-|_____\___|\__,_|_|  |_| |_| |_____|_|  |_|
-
-       AI Tutor - Development Setup
-
-+---------------- Main Menu ----------------+
-|                                           |
-|   > Full Setup (recommended for first)    |
-|     Install Dependencies Only             |
-|     Setup Database Only                   |
-|     Setup Environment Only                |
-|     Run Verification Tests                |
-|     Quick Actions                         |
-|     Exit                                  |
-|                                           |
-+-------------------------------------------+
-```
-
-### Manual Setup
-
-If you prefer manual setup:
-
-```bash
-# Clone the repo
-git clone <repo-url>
-cd xhacks2026
+# Clone repository
+git clone https://github.com/your-org/learnlm.git
+cd learnlm
 
 # Install dependencies
 cd backend && npm install
@@ -78,169 +40,139 @@ cd ../backend
 npm run db:migrate:local
 npm run db:seed:local
 
-# Setup frontend environment
+# Configure environment
 cd ../frontend
 cp .env.example .env
 ```
 
-### Start Development
+### Development
 
 ```bash
-# Terminal 1: Backend (http://localhost:8787)
+# Terminal 1: Backend (port 8787)
 cd backend && npm run dev
 
-# Terminal 2: Frontend (http://localhost:5173)
+# Terminal 2: Frontend (port 5173)
 cd frontend && npm run dev
 ```
 
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
 ## Architecture
 
-```
-+------------------+        +-----------------------+        +---------------------------+
-|  Voice (STT/TTS) | <----> |   Text (Chat UI)      | <----> |   System/Persona Prompts  |
-|  (browser/AI)    |        |   (React/Vite)        |        |   (template + rules)      |
-+------------------+        +-----------------------+        +---------------------------+
-        ^                               |                                   |
-        |                               | HTTPS / WS                        |
-        |                               v                                   |
-        |                     +-----------------------+                     |
-        |                     |  Cloudflare Pages     |                     |
-        |                     |  (static web hosting) |                     |
-        |                     +-----------------------+                     |
-        |                               |                                   |
-        |                               v                                   |
-        |                     +-------------------------------+             |
-        |                     |   Cloudflare Workers API      | <-----------+
-        |                     | (routing, auth, orchestration)|
-        |                     +-------------------------------+
-        |                         |       |          |     |
-        |                         |       |          |     |
-        |         WebSocket       |       |          |     |  RAG / LLM calls
-        |       (real-time chat)  |       |          |     v
-        |                         |       |          |  +------------------+
-        |                         |       |          |  |  Workers AI      |
-        |                         |       |          |  |  - LLM chat      |
-        |                         |       |          |  |  - STT/TTS       |
-        |                         |       |          |  |  - embeddings    |
-        |                         |       |          |  +------------------+
-        |                         |       |          |
-        |                         v       |          |
-        |               +----------------------+     |
-        |               | Durable Objects      |     |
-        |               | VoiceTeacherSession  |     |
-        |               | - session state      |     |
-        |               | - turn-taking        |     |
-        |               | - streaming replies  |     |
-        |               +----------------------+     |
-        |                         |                  |
-        |                         | read/write       | vector search
-        |                         v                  v
-        |                 +---------------+     +------------------+
-        |                 | D1 (SQLite)   |     | Vectorize Index  |
-        |                 | - users       |     | - chunk vectors  |
-        |                 | - courses     |     | - metadata       |
-        |                 | - transcripts |     +------------------+
-        |                 | - progress    |
-        |                 +---------------+
-        |                         ^
-        |                         |
-        |                         v
-        |                 +---------------+
-        |                 | KV            |
-        |                 | - session TTL |
-        |                 | - rate limit  |
-        |                 | - cache       |
-        |                 +---------------+
-```
+LearnLM runs entirely on Cloudflare's developer platform:
 
-## Tech Stack
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Compute | Cloudflare Workers | API routing, orchestration |
+| State | Durable Objects | WebSocket voice sessions |
+| Database | D1 (SQLite) | Users, courses, transcripts |
+| Cache | KV | Session data, rate limits |
+| Search | Vectorize | RAG embeddings |
+| AI | Workers AI | LLM, STT, TTS, embeddings |
+| Frontend | Cloudflare Pages | Static hosting |
 
-### Cloudflare Platform
+For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-| Service | Purpose | Binding |
-|---------|---------|---------|
-| **Workers** | Hono API + orchestration | - |
-| **Workers AI** | STT, TTS, LLM, Embeddings | `AI` |
-| **Durable Objects** | Voice session state + WebSocket hibernation | `VOICE_SESSION` |
-| **D1** | Users, courses, transcripts, progress | `DB` |
-| **Vectorize** | Course content embeddings (768 dims, cosine) | `VECTORIZE` |
-| **KV** | Session cache, rate limits | `KV` |
+## AI Models
 
-### Workers AI Models
+| Model | Provider | Purpose |
+|-------|----------|---------|
+| Llama 3.1 8B | Workers AI | Text generation, tutoring |
+| Whisper Large v3 | Workers AI | Speech-to-text |
+| Deepgram Aura | Workers AI | Text-to-speech (11 voices) |
+| BGE Base EN | Workers AI | Embeddings (768 dim) |
+| FLUX.1 Schnell | Workers AI | Image generation |
 
-| Model | Purpose |
-|-------|---------|
-| `@cf/deepgram/whisper-large-v3-turbo` | Speech-to-Text |
-| `@cf/deepgram/aura-1` | Text-to-Speech (11 voices) |
-| `@cf/meta/llama-3.1-8b-instruct` | Text generation/tutoring |
-| `@cf/baai/bge-base-en-v1.5` | 768-dim embeddings |
-
-### Available Voices
-
-| Voice | Style | Best For |
-|-------|-------|----------|
-| `asteria` | Warm, professional | General tutoring |
-| `orion` | Deep, professional | Technical topics |
-| `athena` | Confident, clear | Business, leadership |
-| `angus` | British, refined | Literature, arts |
-| `zeus` | Powerful, commanding | Motivation |
-| + 6 more | Various styles | See `/api/voices` |
-
-### Frontend
-- React 19 + Vite
-- Tailwind CSS v4
-- TypeScript
-
-### Backend
-- **Hono** on Workers (nodejs_compat)
-- TypeScript
-- Durable Objects with WebSocket Hibernation
+For complete AI documentation, see [docs/AI.md](docs/AI.md).
 
 ## Project Structure
 
 ```
-├── scripts/
-│   └── setup-local.sh        # Interactive TUI setup wizard
-│
+learnlm/
 ├── backend/
 │   ├── src/
-│   │   ├── index.ts          # Hono entry point + routes
-│   │   ├── types.ts          # TypeScript types + Env bindings
-│   │   ├── voices.ts         # Voice configuration
-│   │   └── durable-objects/
-│   │       └── voice-session.ts  # VoiceTeacherSession DO
-│   ├── sql/
-│   │   ├── schema.sql        # D1 database schema
-│   │   └── seed.sql          # Sample data for development
-│   ├── wrangler.jsonc        # Cloudflare configuration
-│   └── package.json
-│
-└── frontend/
-    ├── src/
-    │   ├── components/
-    │   │   ├── ui/           # UI components
-    │   │   ├── customize/    # Voice/character selection
-    │   │   └── layout/       # Layout components
-    │   ├── pages/            # Route pages
-    │   ├── hooks/            # React hooks
-    │   └── data/             # Static data (voices, characters)
-    └── package.json
+│   │   ├── routes/           # API endpoints
+│   │   ├── services/         # Business logic
+│   │   └── durable-objects/  # Voice session state
+│   ├── sql/                  # Database schema
+│   └── wrangler.jsonc        # Cloudflare config
+├── frontend/
+│   ├── src/
+│   │   ├── pages/            # Route pages
+│   │   ├── components/       # React components
+│   │   └── hooks/            # Custom hooks
+│   └── vite.config.ts
+├── docker/
+│   └── mcp-server/           # MCP server (optional)
+└── docs/                     # Documentation
 ```
 
-## NPM Scripts
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, databases, data flow |
+| [API.md](docs/API.md) | REST API endpoint reference |
+| [MCP.md](docs/MCP.md) | MCP server setup and tools |
+| [AI.md](docs/AI.md) | AI models and configuration |
+| [FEATURES.md](docs/FEATURES.md) | Feature descriptions and roadmap |
+
+## API Reference
+
+The backend exposes a REST API with WebSocket support for voice sessions.
+
+**Base URL**: `https://sfu-ai-teacher.email4leit.workers.dev`
+
+Key endpoints:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/courses` | Search courses |
+| GET | `/api/experts` | Generate AI tutors |
+| GET | `/api/outlines/generate/stream` | Stream course outline (SSE) |
+| WS | `/api/voice/:courseCode` | Voice tutoring session |
+| POST | `/api/editor-chat` | Editor chat with slash commands |
+
+For complete API documentation, see [docs/API.md](docs/API.md).
+
+## Deployment
 
 ### Backend
 
 ```bash
-npm run dev           # Start dev server (with DB migration)
-npm run dev:only      # Start dev server (skip migration)
-npm run test          # Run tests in watch mode
-npm run test:run      # Run tests once
-npm run db:migrate:local  # Run schema migrations locally
-npm run db:seed:local     # Seed sample data locally
-npm run db:reset:local    # Reset and seed database
-npm run db:studio         # Open D1 Studio UI
-npm run deploy            # Deploy to Cloudflare
+cd backend
+npx wrangler login
+npx wrangler deploy
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm run build
+npx wrangler pages deploy dist
+```
+
+### Environment Variables
+
+**Backend** (set in Cloudflare dashboard or wrangler.jsonc):
+- Bindings: `DB`, `KV`, `VECTORIZE`, `AI`, `VOICE_SESSION`, `EDITOR_VOICE`
+
+**Frontend** (.env):
+```
+VITE_BACKEND_URL=https://your-worker.workers.dev
+```
+
+## Development Scripts
+
+### Backend
+
+```bash
+npm run dev              # Start development server
+npm run deploy           # Deploy to Cloudflare
+npm run db:migrate:local # Run database migrations
+npm run db:seed:local    # Seed sample data
+npm run db:studio        # Open D1 Studio
 ```
 
 ### Frontend
@@ -251,39 +183,13 @@ npm run build    # Build for production
 npm run preview  # Preview production build
 ```
 
-## Voice Pipeline Flow
+## Contributing
 
-```
-1. Student speaks → Microphone captures audio
-2. Audio chunks → WebSocket → Durable Object
-3. STT (Deepgram Whisper) → Transcript
-4. Check for interrupt commands ("stop", "wait")
-5. RAG query (Vectorize) → Relevant course content
-6. LLM (Llama 3.1) → Generate response with context
-7. TTS (Deepgram Aura) → Audio stream
-8. Audio → WebSocket → Frontend playback
-9. Transcript → D1 (async flush)
-```
-
-## Database Schema
-
-| Table | Purpose |
-|-------|---------|
-| `users` | User accounts + preferences |
-| `sfu_courses` | Cached course metadata |
-| `sfu_outlines` | Course outlines (chunked for RAG) |
-| `voice_sessions` | Active/completed sessions |
-| `transcripts` | Conversation transcripts |
-| `progress` | Learning progress per course |
-| `instructors` | Instructor data with ratings |
-
-## Deployment
-
-```bash
-cd backend
-npx wrangler login    # Authenticate with Cloudflare
-npx wrangler deploy   # Deploy to production
-```
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/name`)
+3. Commit changes (`git commit -am 'Add feature'`)
+4. Push to branch (`git push origin feature/name`)
+5. Open a Pull Request
 
 ## License
 
