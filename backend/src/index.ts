@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env } from './types';
+import { VOICES } from './voices';
 
-// Export Durable Object
-export { VoiceTeacherSession } from './durable-objects/voice-session';
+// Export Durable Object (use v2 for optimized voice)
+export { VoiceTeacherSession } from './durable-objects/voice-session-v2';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -14,8 +15,38 @@ app.use('*', cors({
 }));
 
 // Health check
-app.get('/', (c) => c.json({ status: 'ok', service: 'SFU AI Teacher' }));
+app.get('/', (c) => c.json({ status: 'ok', service: 'SFU AI Teacher', version: '2.0' }));
 app.get('/health', (c) => c.json({ status: 'healthy' }));
+
+// === VOICE & PERSONA ENDPOINTS ===
+
+// List available voices
+app.get('/api/voices', (c) => {
+  const voices = Object.values(VOICES).map(v => ({
+    id: v.id,
+    name: v.name,
+    gender: v.gender,
+    style: v.style,
+    bestFor: v.bestFor,
+  }));
+  return c.json({ voices });
+});
+
+// Combined config endpoint for frontend initialization
+app.get('/api/config', (c) => {
+  const voices = Object.values(VOICES).map(v => ({
+    id: v.id,
+    name: v.name,
+    gender: v.gender,
+    style: v.style,
+    bestFor: v.bestFor,
+  }));
+  
+  return c.json({
+    voices,
+    defaultVoice: 'aura-asteria-en',
+  });
+});
 
 // Courses API - TODO: Implement
 app.get('/api/courses', async (c) => {
@@ -39,6 +70,7 @@ app.post('/api/admin/ingest', async (c) => {
 });
 
 // WebSocket upgrade for voice sessions
+// Supports: /api/voice/CMPT120 or /api/voice/CMPT120?voice=aura-orion-en&persona=linus-torvalds
 app.get('/api/voice/:courseCode', async (c) => {
   const upgradeHeader = c.req.header('Upgrade');
   if (upgradeHeader !== 'websocket') {
@@ -46,7 +78,9 @@ app.get('/api/voice/:courseCode', async (c) => {
   }
 
   const courseCode = c.req.param('courseCode');
-  const id = c.env.VOICE_SESSION.idFromName(courseCode);
+  // Use unique session ID per user (or course for shared sessions)
+  const sessionKey = `${courseCode}-${Date.now()}`;
+  const id = c.env.VOICE_SESSION.idFromName(sessionKey);
   const stub = c.env.VOICE_SESSION.get(id);
   
   return stub.fetch(c.req.raw);

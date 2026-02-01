@@ -25,21 +25,44 @@ export function useRealtimeVoice({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioQueueRef = useRef<ArrayBuffer[]>([]);
+  const isPlayingRef = useRef(false);
+  const vadEnabledRef = useRef(false);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const vadIntervalRef = useRef<number | null>(null);
+  const [isVadActive, setIsVadActive] = useState(false);
 
-  // Play audio from base64
-  const playAudio = useCallback(async (base64: string) => {
+  // Play audio from base64 - optimized with pre-buffering and interrupt support
+  const playAudio = useCallback(async (base64: string, onComplete?: () => void) => {
     if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContext();
+      audioContextRef.current = new AudioContext({ sampleRate: 48000 });
     }
     
     try {
       const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
       const audioBuffer = await audioContextRef.current.decodeAudioData(bytes.buffer.slice(0));
+      
+      // Stop any currently playing audio for interrupt support
+      if (currentSourceRef.current) {
+        try {
+          currentSourceRef.current.stop();
+        } catch (e) {
+          // Ignore if already stopped
+        }
+      }
+      
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(audioContextRef.current.destination);
       
-      source.onended = () => setIsSpeaking(false);
+      source.onended = () => {
+        currentSourceRef.current = null;
+        setIsSpeaking(false);
+        onComplete?.();
+      };
+      
+      currentSourceRef.current = source;
       source.start();
       setIsSpeaking(true);
     } catch (e) {
@@ -48,7 +71,7 @@ export function useRealtimeVoice({
     }
   }, []);
 
-  // Handle WebSocket messages
+  // Handle WebSocket messages - v2 protocol with streaming support
   const handleMessage = useCallback((event: MessageEvent) => {
     try {
       const data = JSON.parse(event.data);
@@ -57,15 +80,29 @@ export function useRealtimeVoice({
         case 'state_change':
           setIsThinking(data.state === 'processing');
           if (data.state === 'speaking') setIsSpeaking(true);
-          if (data.state === 'idle') setIsThinking(false);
+          if (data.state === 'idle') {
+            setIsThinking(false);
+            setIsSpeaking(false);
+          }
           break;
 
         case 'transcript':
           onTranscriptUpdate?.(data.text, data.isUser);
           break;
 
+        case 'transcript_partial':
+          onTranscriptUpdate?.(data.text, true);
+          break;
+
         case 'audio':
           playAudio(data.audio);
+          break;
+
+        case 'audio_chunk':
+          playAudio(data.audio);
+          break;
+
+        case 'audio_complete':
           break;
 
         case 'error':
@@ -78,36 +115,46 @@ export function useRealtimeVoice({
     }
   }, [playAudio, onTranscriptUpdate, onError]);
 
-  // Connect to WebSocket
-  const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+  // Connect to WebSocket with optional warmup for lower latency
+  const connect = useCallback((warmup = false) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN && !warmup) return;
 
-    try {
-      audioContextRef.current = new AudioContext();
-      const ws = new WebSocket(serverUrl);
-      wsRef.current = ws;
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext({ sampleRate: 48000 });
+    }
 
-      ws.onopen = () => {
+    const ws = new WebSocket(serverUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      if (!warmup) {
         setIsConnected(true);
         onConnectionChange?.(true);
         ws.send(JSON.stringify({ type: 'start_session', courseCode }));
-      };
+      }
+    };
 
-      ws.onmessage = handleMessage;
+    ws.onmessage = handleMessage;
 
-      ws.onclose = () => {
+    ws.onclose = () => {
+      if (!warmup) {
         setIsConnected(false);
         setIsListening(false);
         setIsSpeaking(false);
         setIsThinking(false);
         onConnectionChange?.(false);
-      };
+      }
+    };
 
-      ws.onerror = () => onError?.('Connection failed');
-    } catch (e) {
-      onError?.('Failed to connect');
-    }
+    ws.onerror = () => {
+      if (!warmup) onError?.('Connection failed');
+    };
   }, [serverUrl, courseCode, handleMessage, onConnectionChange, onError]);
+
+  // Warmup connection on mount for lower first-request latency
+  useEffect(() => {
+    connect(true);
+  }, [connect]);
 
   // Disconnect
   const disconnect = useCallback(() => {
@@ -120,7 +167,7 @@ export function useRealtimeVoice({
     setIsListening(false);
   }, []);
 
-  // Start recording
+  // Start recording with optional VAD
   const startRecording = useCallback(async () => {
     if (isListening || !wsRef.current) return;
 
@@ -130,6 +177,15 @@ export function useRealtimeVoice({
       });
       streamRef.current = stream;
       chunksRef.current = [];
+
+      // Set up VAD if enabled
+      if (vadEnabledRef.current && !analyserRef.current) {
+        audioContextRef.current = audioContextRef.current || new AudioContext({ sampleRate: 48000 });
+        analyserRef.current = audioContextRef.current.createAnalyser();
+        const source = audioContextRef.current.createMediaStreamSource(stream);
+        source.connect(analyserRef.current);
+        analyserRef.current.fftSize = 256;
+      }
 
       const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
       mediaRecorderRef.current = recorder;
@@ -145,10 +201,12 @@ export function useRealtimeVoice({
           const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
           wsRef.current.send(JSON.stringify({ type: 'audio', audio: base64 }));
         }
-        streamRef.current?.getTracks().forEach(t => t.stop());
+        if (!vadEnabledRef.current) {
+          streamRef.current?.getTracks().forEach(t => t.stop());
+        }
       };
 
-      recorder.start(100);
+      recorder.start(40); // Reduced from 100ms to 40ms for lower latency
       setIsListening(true);
     } catch (e) {
       onError?.('Microphone access denied');
@@ -175,11 +233,109 @@ export function useRealtimeVoice({
     wsRef.current?.send(JSON.stringify({ type: 'clear_history' }));
   }, []);
 
-  // Interrupt
+  // Interrupt with audio stop
   const interrupt = useCallback(() => {
     wsRef.current?.send(JSON.stringify({ type: 'interrupt' }));
+    if (currentSourceRef.current) {
+      try {
+        currentSourceRef.current.stop();
+      } catch (e) {
+        // Ignore
+      }
+      currentSourceRef.current = null;
+    }
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
     setIsSpeaking(false);
     setIsThinking(false);
+  }, []);
+
+  // VAD: Start hands-free mode with automatic voice detection
+  const startVAD = useCallback(async () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext({ sampleRate: 48000 });
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { echoCancellation: true, noiseSuppression: true } 
+      });
+      streamRef.current = stream;
+
+      const analyser = audioContextRef.current.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.8;
+      analyserRef.current = analyser;
+
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      vadEnabledRef.current = true;
+      setIsVadActive(true);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let silenceCounter = 0;
+      const SILENCE_THRESHOLD = 30;
+      const SPEECH_THRESHOLD = 40;
+      const MAX_SILENCE_FRAMES = 30;
+
+      const checkVAD = () => {
+        if (!vadEnabledRef.current || !analyserRef.current) return;
+
+        analyserRef.current.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+
+        if (average > SPEECH_THRESHOLD) {
+          // Voice detected - start recording if not already
+          if (!isListening && !isSpeaking) {
+            silenceCounter = 0;
+            startRecording();
+          } else {
+            silenceCounter = 0;
+          }
+        } else if (average < SILENCE_THRESHOLD && isListening) {
+          // Silence - increment counter
+          silenceCounter++;
+          if (silenceCounter > MAX_SILENCE_FRAMES) {
+            // End of speech
+            stopRecording();
+            silenceCounter = 0;
+          }
+        }
+
+        vadIntervalRef.current = requestAnimationFrame(checkVAD);
+      };
+
+      checkVAD();
+    } catch (e) {
+      console.error('VAD start error:', e);
+      onError?.('Failed to start voice detection');
+      vadEnabledRef.current = false;
+      setIsVadActive(false);
+    }
+  }, [isListening, isSpeaking, startRecording, stopRecording, onError]);
+
+  // VAD: Stop hands-free mode
+  const stopVAD = useCallback(() => {
+    vadEnabledRef.current = false;
+    setIsVadActive(false);
+
+    if (vadIntervalRef.current) {
+      cancelAnimationFrame(vadIntervalRef.current);
+      vadIntervalRef.current = null;
+    }
+
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsListening(false);
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+
+    analyserRef.current = null;
   }, []);
 
   // Cleanup
@@ -192,13 +348,13 @@ export function useRealtimeVoice({
     isListening,
     isSpeaking,
     isThinking,
-    isVadActive: false,
+    isVadActive,
     connect,
     disconnect,
     startRecording,
     stopRecording,
-    startVAD: () => {},
-    stopVAD: () => {},
+    startVAD,
+    stopVAD,
     sendText,
     clearConversation,
     interrupt,

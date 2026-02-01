@@ -19,32 +19,70 @@ A real-time voice-based AI tutoring platform for SFU students. Pick a course, ha
 ## 🏗️ Architecture
 
 ```
-┌─────────────────┐    WebSocket    ┌─────────────────────────────────────────────────┐
-│                 │ ◄─────────────► │              Cloudflare Workers                 │
-│  React Frontend │                 │                                                 │
-│  (Vite + Shadcn)│                 │  ┌─────────────┐     ┌──────────────────────┐  │
-│                 │                 │  │    Hono     │────►│  VoiceTeacherSession │  │
-└─────────────────┘                 │  │   Router    │     │   (Durable Object)   │  │
-                                    │  └─────────────┘     └──────────────────────┘  │
-                                    │         │                      │               │
-                                    │         ▼                      ▼               │
-                                    │  ┌─────────────┐     ┌──────────────────────┐  │
-                                    │  │     D1      │     │     Workers AI       │  │
-                                    │  │  Database   │     │  STT/TTS/LLM/Embed   │  │
-                                    │  └─────────────┘     └──────────────────────┘  │
-                                    │         │                      ▼               │
-                                    │         ▼              ┌──────────────────────┐│
-                                    │  ┌─────────────┐       │     Vectorize        ││
-                                    │  │     KV      │       │   Course Embeddings  ││
-                                    │  │   Cache     │       └──────────────────────┘│
-                                    │  └─────────────┘                               │
-                                    └─────────────────────────────────────────────────┘
-                                                         │
-                                                         ▼
-                                    ┌─────────────────────────────────────────────────┐
-                                    │              SFU Courses API                    │
-                                    │         https://api.sfucourses.com              │
-                                    └─────────────────────────────────────────────────┘
++------------------+        +-----------------------+        +---------------------------+
+|  Voice (STT/TTS) | <----> |   Text (Chat UI)      | <----> |   System/Persona Prompts  |
+|  (browser/AI)    |        |   (React/Vite)        |        |   (template + rules)      |
++------------------+        +-----------------------+        +---------------------------+
+        ^                               |                                   |
+        |                               | HTTPS / WS                        |
+        |                               v                                   |
+        |                     +-----------------------+                     |
+        |                     |  Cloudflare Pages     |                     |
+        |                     |  (static web hosting) |                     |
+        |                     +-----------------------+                     |
+        |                               |                                   |
+        |                               v                                   |
+        |                     +-------------------------------+             |
+        |                     |   Cloudflare Workers API      | <-----------+
+        |                     | (routing, auth, orchestration)|
+        |                     +-------------------------------+
+        |                         |       |          |     |
+        |                         |       |          |     |
+        |         WebSocket       |       |          |     |  RAG / LLM calls
+        |       (real-time chat)  |       |          |     v
+        |                         |       |          |  +------------------+
+        |                         |       |          |  |  Workers AI      |
+        |                         |       |          |  |  - LLM chat      |
+        |                         |       |          |  |  - STT/TTS       |
+        |                         |       |          |  |  - embeddings    |
+        |                         |       |          |  +------------------+
+        |                         |       |          |
+        |                         v       |          |
+        |               +----------------------+     |
+        |               | Durable Objects      |     |
+        |               | VoiceTeacherSession  |     |
+        |               | - session state      |     |
+        |               | - turn-taking        |     |
+        |               | - streaming replies  |     |
+        |               +----------------------+     |
+        |                         |                  |
+        |                         | read/write       | vector search
+        |                         v                  v
+        |                 +---------------+     +------------------+
+        |                 | D1 (SQLite)   |     | Vectorize Index  |
+        |                 | - users       |     | - chunk vectors  |
+        |                 | - courses     |     | - metadata       |
+        |                 | - transcripts |     +------------------+
+        |                 | - progress    |
+        |                 +---------------+
+        |                         ^
+        |                         |
+        |                         v
+        |                 +---------------+
+        |                 | KV            |
+        |                 | - session TTL |
+        |                 | - rate limit  |
+        |                 | - cache course|
+        |                 +---------------+
+
+Legend:
+  Pages          → Frontend hosting (React/Vite)
+  Workers API    → HTTP endpoints + orchestration (Hono)
+  Durable Objects→ WebSocket voice session + streaming + state
+  D1             → Durable relational storage
+  KV             → Low-latency cache + TTL tokens
+  Workers AI     → LLM + STT + TTS + embeddings
+  Vectorize      → Vector retrieval for RAG
 ```
 
 ## 🛠️ Tech Stack
@@ -60,12 +98,35 @@ A real-time voice-based AI tutoring platform for SFU students. Pick a course, ha
 | **KV** | Session cache, rate limits | `KV` |
 
 ### Workers AI Models
+
 | Model | Purpose |
 |-------|---------|
 | `@cf/deepgram/whisper-large-v3-turbo` | Speech-to-Text |
-| `@cf/deepgram/aura-asteria-en` | Text-to-Speech |
+| `@cf/deepgram/aura-*-en` | Text-to-Speech (11 voices) |
 | `@cf/meta/llama-3.1-8b-instruct` | Text generation/tutoring |
 | `@cf/baai/bge-base-en-v1.5` | 768-dim embeddings |
+
+### Available Voices
+
+| Voice | Style | Best For |
+|-------|-------|----------|
+| `aura-asteria-en` | Warm, professional (F) | General tutoring |
+| `aura-orion-en` | Deep, professional (M) | Technical topics |
+| `aura-athena-en` | Confident, clear (F) | Business, leadership |
+| `aura-angus-en` | British, refined (M) | Literature, arts |
+| `aura-zeus-en` | Powerful, commanding (M) | Motivation |
+| + 6 more voices | Various styles | See `/api/voices` |
+
+### Personality Personas
+
+| Persona | Expertise |
+|---------|-----------|
+| `linus-torvalds` | OS, kernel, open source |
+| `guillermo-rauch` | Web dev, React, Vercel |
+| `dan-abramov` | React, state management |
+| `grace-hopper` | Compilers, programming |
+| `richard-feynman` | Physics, problem solving |
+| + more | See `/api/personas` |
 
 ### Frontend
 - React 19 + Vite

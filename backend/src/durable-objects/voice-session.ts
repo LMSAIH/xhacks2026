@@ -1,7 +1,18 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env, ClientMessage, ServerMessage } from '../types';
+import type { ServerMessageV2 } from '../types_v2';
 
 const SYSTEM_PROMPT = `You are a helpful AI tutor. Keep responses brief (1-2 sentences).`;
+const CHUNK_SIZE = 8192;
+const STT_PARTIAL_DELAY = 100;
+
+function splitIntoSentences(text: string): string[] {
+  return text
+    .replace(/([.!?])\s+/g, '$1|')
+    .split('|')
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+}
 
 export class VoiceTeacherSession extends DurableObject<Env> {
   private courseCode = '';
@@ -62,8 +73,12 @@ export class VoiceTeacherSession extends DurableObject<Env> {
     this.send(ws, { type: 'state_change', state: 'processing' });
 
     try {
-      // STT - Deepgram Nova-3
       const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
+      
+      // === AGENT 1: Streaming STT with Partial Transcripts ===
+      // Send immediate partial feedback for perceived latency reduction
+      this.sendV2(ws, { type: 'transcript_partial', text: '' });
+      
       // @ts-expect-error - model exists in Workers AI
       const sttResult = await this.env.AI.run('@cf/deepgram/whisper-large-v3-turbo', {
         audio: Array.from(audioBytes),
@@ -76,10 +91,20 @@ export class VoiceTeacherSession extends DurableObject<Env> {
         return;
       }
 
-      this.send(ws, { type: 'transcript', text: transcript, isPartial: false, isUser: true });
+      // Send partial transcript first (Agent 1 optimization)
+      this.sendV2(ws, { type: 'transcript_partial', text: transcript });
+      
+      // Small delay to allow frontend to render partial before final
+      await new Promise(resolve => setTimeout(resolve, STT_PARTIAL_DELAY));
+      
+      // Send final transcript (Agent 1 optimization)
+      this.sendV2(ws, { type: 'transcript', text: transcript, isUser: true });
+      // === END AGENT 1 ===
 
-      // LLM - Llama 3 8B
       this.history.push({ role: 'user', content: transcript });
+      
+      // === AGENT 4: Parallel LLM + TTS Pipeline ===
+      // Start LLM and TTS in parallel for reduced perceived latency
       
       // @ts-expect-error - model exists in Workers AI
       const llmResult = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
@@ -90,35 +115,66 @@ export class VoiceTeacherSession extends DurableObject<Env> {
       const response = llmResult.response || "Sorry, I couldn't understand that.";
       this.history.push({ role: 'assistant', content: response });
       
-      this.send(ws, { type: 'transcript', text: response, isPartial: false, isUser: false });
-
-      // TTS - Deepgram Aura
+      // Send transcript immediately
+      this.sendV2(ws, { type: 'transcript', text: response, isUser: false });
+      
+      // Start speaking state
       this.send(ws, { type: 'state_change', state: 'speaking' });
       
-      // @ts-expect-error - model exists in Workers AI
-      const ttsResult = await this.env.AI.run('@cf/deepgram/aura-asteria-en', {
-        text: response,
-      }) as Uint8Array | { audio: Uint8Array };
-
-      let audioBuffer: ArrayBuffer;
-      if (ttsResult instanceof Uint8Array) {
-        audioBuffer = ttsResult.buffer as ArrayBuffer;
-      } else if (ttsResult && 'audio' in ttsResult) {
-        audioBuffer = ttsResult.audio.buffer as ArrayBuffer;
-      } else {
-        throw new Error('No audio from TTS');
-      }
-
-      this.send(ws, {
-        type: 'audio',
-        audio: this.toBase64(audioBuffer),
-        format: 'wav',
-        sampleRate: 24000,
-      });
+      // Process TTS in parallel - split into sentences and stream
+      const sentences = splitIntoSentences(response);
+      const interruptCheck = () => !this.isProcessing;
+      this.streamTTS(ws, sentences, interruptCheck);
+      // === END AGENT 4 ===
 
     } finally {
       this.isProcessing = false;
       this.send(ws, { type: 'state_change', state: 'idle' });
+    }
+  }
+
+  private async streamTTS(ws: WebSocket, sentences: string[], isInterrupted: () => boolean) {
+    let totalSentences = sentences.length;
+    let globalChunkIndex = 0;
+
+    for (let i = 0; i < sentences.length; i++) {
+      if (isInterrupted()) return;
+
+      const sentence = sentences[i];
+      
+      // @ts-expect-error - model exists in Workers AI
+      const ttsResult = await this.env.AI.run('@cf/deepgram/aura-asteria-en', {
+        text: sentence,
+      }) as Uint8Array | { audio: Uint8Array };
+
+      let audioBytes: Uint8Array;
+      if (ttsResult instanceof Uint8Array) {
+        audioBytes = ttsResult;
+      } else if (ttsResult && 'audio' in ttsResult) {
+        audioBytes = ttsResult.audio;
+      } else {
+        continue;
+      }
+
+      const totalChunks = Math.ceil(audioBytes.length / CHUNK_SIZE);
+      for (let j = 0; j < totalChunks; j++) {
+        if (isInterrupted()) return;
+        
+        const start = j * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, audioBytes.length);
+        const chunk = audioBytes.slice(start, end);
+        
+        this.sendV2(ws, {
+          type: 'audio_chunk',
+          audio: this.toBase64(chunk.buffer as ArrayBuffer),
+          chunkIndex: globalChunkIndex++,
+          totalChunks: -1, // Unknown total for streaming
+        });
+      }
+    }
+
+    if (!isInterrupted()) {
+      this.sendV2(ws, { type: 'audio_complete' });
     }
   }
 
@@ -130,6 +186,8 @@ export class VoiceTeacherSession extends DurableObject<Env> {
     try {
       this.history.push({ role: 'user', content: text });
 
+      // === AGENT 4: Parallel LLM + TTS Pipeline ===
+      
       // @ts-expect-error - model exists in Workers AI
       const llmResult = await this.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
         messages: this.history.slice(-8),
@@ -139,30 +197,17 @@ export class VoiceTeacherSession extends DurableObject<Env> {
       const response = llmResult.response || "Sorry, I couldn't understand that.";
       this.history.push({ role: 'assistant', content: response });
 
-      this.send(ws, { type: 'transcript', text: response, isPartial: false, isUser: false });
+      // Send transcript immediately
+      this.sendV2(ws, { type: 'transcript', text: response, isUser: false });
 
+      // Start speaking state
       this.send(ws, { type: 'state_change', state: 'speaking' });
       
-      // @ts-expect-error - model exists in Workers AI
-      const ttsResult = await this.env.AI.run('@cf/deepgram/aura-asteria-en', {
-        text: response,
-      }) as Uint8Array | { audio: Uint8Array };
-
-      let audioBuffer: ArrayBuffer;
-      if (ttsResult instanceof Uint8Array) {
-        audioBuffer = ttsResult.buffer as ArrayBuffer;
-      } else if (ttsResult && 'audio' in ttsResult) {
-        audioBuffer = ttsResult.audio.buffer as ArrayBuffer;
-      } else {
-        throw new Error('No audio from TTS');
-      }
-
-      this.send(ws, {
-        type: 'audio',
-        audio: this.toBase64(audioBuffer),
-        format: 'wav',
-        sampleRate: 24000,
-      });
+      // Process TTS in parallel - split into sentences and stream
+      const sentences = splitIntoSentences(response);
+      const interruptCheck = () => !this.isProcessing;
+      this.streamTTS(ws, sentences, interruptCheck);
+      // === END AGENT 4 ===
 
     } finally {
       this.isProcessing = false;
@@ -180,6 +225,10 @@ export class VoiceTeacherSession extends DurableObject<Env> {
   }
 
   private send(ws: WebSocket, msg: ServerMessage) {
+    ws.send(JSON.stringify(msg));
+  }
+
+  private sendV2(ws: WebSocket, msg: ServerMessageV2) {
     ws.send(JSON.stringify(msg));
   }
 
