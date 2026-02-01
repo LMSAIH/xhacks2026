@@ -373,6 +373,102 @@ export async function generateOutline(
 }
 
 /**
+ * Stream outline generation - returns sections as they're generated
+ * Uses Server-Sent Events (SSE) for real-time updates
+ */
+export interface StreamingOutlineCallbacks {
+  onSection: (section: OutlineItem, index: number, total: number) => void;
+  onMetadata: (metadata: {
+    learningObjectives: string[];
+    estimatedDuration: string;
+    difficulty: string;
+    totalSections?: number;
+  }) => void;
+  onComplete: (data: { id: string; topic: string; cached: boolean }) => void;
+  onError: (error: string) => void;
+}
+
+export async function generateOutlineStreaming(
+  topic: string,
+  callbacks: StreamingOutlineCallbacks,
+  character?: { id: string; name: string; teachingStyle?: string },
+  difficulty: 'beginner' | 'intermediate' | 'advanced' = 'intermediate'
+): Promise<void> {
+  const params = new URLSearchParams({ topic, difficulty });
+  if (character) {
+    params.append('character', JSON.stringify(character));
+  }
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/outlines/generate/stream?${params.toString()}`);
+    
+    if (!response.ok) {
+      callbacks.onError(`API error: ${response.status}`);
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      callbacks.onError('No response body');
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      
+      // Parse SSE events from buffer
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+      let currentEvent = '';
+      let currentData = '';
+
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          currentEvent = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+          currentData = line.slice(5).trim();
+        } else if (line === '' && currentEvent && currentData) {
+          // End of event, process it
+          try {
+            const data = JSON.parse(currentData);
+            
+            switch (currentEvent) {
+              case 'section':
+                callbacks.onSection(data.section, data.index, data.total);
+                break;
+              case 'metadata':
+                callbacks.onMetadata(data);
+                break;
+              case 'complete':
+                callbacks.onComplete(data);
+                break;
+              case 'error':
+                callbacks.onError(data.error);
+                break;
+            }
+          } catch (e) {
+            console.error('Failed to parse SSE data:', e);
+          }
+          
+          currentEvent = '';
+          currentData = '';
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Streaming outline error:', error);
+    callbacks.onError(error instanceof Error ? error.message : 'Unknown error');
+  }
+}
+
+/**
  * Get an outline by ID
  */
 export async function getOutline(id: string): Promise<GeneratedOutline | null> {

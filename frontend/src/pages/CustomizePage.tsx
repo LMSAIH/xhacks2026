@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { PageLayout } from "@/components/layout";
 import {
@@ -9,48 +9,56 @@ import {
   CHARACTERS,
   VOICES,
 } from "@/components/customize";
-import { useExperts } from "@/hooks";
+import { useOnboardingPipeline } from "@/hooks/use-onboarding-pipeline";
 import type { Character } from "@/components/customize/data";
-import { generateOutline, type GeneratedOutline, type OutlineItem } from "@/lib/api";
+import type { OutlineItem } from "@/lib/api";
 
 type Step = "character" | "voice" | "review";
 
 export default function CustomizePage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { topic, courseId, courseName } = location.state || {};
+  const { topic, courseName } = location.state || {};
 
   const [currentStep, setCurrentStep] = useState<Step>("character");
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
   const [customCharacterDescription, setCustomCharacterDescription] = useState("");
   const [generatedCustomCharacter, setGeneratedCustomCharacter] = useState<Character | null>(null);
-  
-  // Outline state
-  const [generatedOutline, setGeneratedOutline] = useState<GeneratedOutline | null>(null);
-  const [isLoadingOutline, setIsLoadingOutline] = useState(false);
-  const [outlineError, setOutlineError] = useState<string | null>(null);
 
   const displayTopic = topic || courseName || "Custom Topic";
   
-  // Always fetch AI-generated experts based on the topic or course name
-  const shouldFetchExperts = !!(topic || courseName);
-  
-  const {
-    experts,
-    isLoading: isLoadingExperts,
-    isGeneratingImages,
-    generateImages,
-  } = useExperts({
-    topic: displayTopic,
-    count: 6,
-    withImages: true, // Get images in one call
-    enabled: shouldFetchExperts,
+  // Use the onboarding pipeline for parallel generation
+  // This starts fetching experts, images, AND outline all at once when topic is set
+  const pipeline = useOnboardingPipeline({
+    enabled: !!(topic || courseName),
   });
+  
+  // Start the pipeline when the component mounts with a topic
+  useEffect(() => {
+    if (displayTopic && displayTopic !== "Custom Topic") {
+      pipeline.setTopic(displayTopic);
+    }
+  }, [displayTopic]);
+  
+  // Regenerate outline when user selects a character (to personalize it)
+  useEffect(() => {
+    if (currentStep === "review" && selectedCharacterId && pipeline.outline) {
+      const character = pipeline.experts.find(e => e.id === selectedCharacterId);
+      if (character) {
+        // Regenerate with character info for personalized outline
+        pipeline.regenerateOutline({
+          id: character.id,
+          name: character.name,
+          teachingStyle: character.teachingStyle,
+        });
+      }
+    }
+  }, [currentStep, selectedCharacterId]);
 
-  // Convert experts to Character format for the component
+  // Convert pipeline experts to Character format for the component
   const aiCharacters: Character[] = useMemo(() => {
-    return experts.map((expert) => ({
+    return pipeline.experts.map((expert) => ({
       id: expert.id,
       name: expert.name,
       title: expert.title,
@@ -59,10 +67,11 @@ export default function CustomizePage() {
       description: expert.description,
       teachingStyle: expert.teachingStyle,
     }));
-  }, [experts]);
+  }, [pipeline.experts]);
 
   // Use AI experts if available, otherwise use static characters
   // Include the generated custom character if it exists
+  const shouldFetchExperts = !!(topic || courseName);
   const allCharacters = useMemo(() => {
     const baseCharacters = shouldFetchExperts && aiCharacters.length > 0 ? aiCharacters : CHARACTERS;
     if (generatedCustomCharacter) {
@@ -73,42 +82,6 @@ export default function CustomizePage() {
   
   const selectedCharacter = allCharacters.find((c) => c.id === selectedCharacterId) || null;
   const selectedVoice = VOICES.find((v) => v.id === selectedVoiceId) || null;
-
-  // Fetch outline when entering review step
-  const fetchOutline = useCallback(async () => {
-    if (!displayTopic) return;
-    
-    setIsLoadingOutline(true);
-    setOutlineError(null);
-    
-    try {
-      const characterInfo = selectedCharacter ? {
-        id: selectedCharacter.id,
-        name: selectedCharacter.name,
-        teachingStyle: selectedCharacter.teachingStyle,
-      } : undefined;
-      
-      const outline = await generateOutline(displayTopic, characterInfo);
-      
-      if (outline) {
-        setGeneratedOutline(outline);
-      } else {
-        setOutlineError("Failed to generate outline. Please try again.");
-      }
-    } catch (error) {
-      console.error("Error generating outline:", error);
-      setOutlineError(error instanceof Error ? error.message : "An error occurred");
-    } finally {
-      setIsLoadingOutline(false);
-    }
-  }, [displayTopic, selectedCharacter]);
-
-  // Fetch outline when entering review step
-  useEffect(() => {
-    if (currentStep === "review" && !generatedOutline && !isLoadingOutline) {
-      fetchOutline();
-    }
-  }, [currentStep, generatedOutline, isLoadingOutline, fetchOutline]);
 
   const steps = [
     {
@@ -165,7 +138,7 @@ export default function CustomizePage() {
           voice: selectedVoice?.id,
           personality: selectedCharacter?.teachingStyle || "helpful, patient, and encouraging",
         },
-        outlineId: generatedOutline?.id,
+        outlineId: pipeline.outline?.id,
       },
     });
   };
@@ -186,9 +159,9 @@ export default function CustomizePage() {
             onCustomChange={setCustomCharacterDescription}
             onContinue={() => setCurrentStep("voice")}
             experts={aiCharacters}
-            isLoading={isLoadingExperts}
-            isGeneratingImages={isGeneratingImages}
-            onGenerateImages={generateImages}
+            isLoading={pipeline.isLoadingExperts}
+            isGeneratingImages={pipeline.isGeneratingImages}
+            onGenerateImages={pipeline.retryImages}
             useAIExperts={shouldFetchExperts}
             customCharacter={generatedCustomCharacter}
             onCustomCharacterGenerated={setGeneratedCustomCharacter}
@@ -213,9 +186,12 @@ export default function CustomizePage() {
             voice={selectedVoice}
             onBack={() => setCurrentStep("voice")}
             onStart={handleStart}
-            outline={generatedOutline}
-            isLoadingOutline={isLoadingOutline}
-            outlineError={outlineError}
+            outline={pipeline.outline}
+            isLoadingOutline={pipeline.isLoadingOutline}
+            outlineError={pipeline.outlineError}
+            streamingSections={pipeline.streamingSections}
+            isStreamingOutline={pipeline.isStreamingOutline}
+            outlineProgress={pipeline.outlineProgress}
           />
         )}
       </StepContainer>

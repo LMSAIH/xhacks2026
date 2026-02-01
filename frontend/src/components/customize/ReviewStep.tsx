@@ -22,6 +22,10 @@ interface ReviewStepProps {
   outline: GeneratedOutline | null;
   isLoadingOutline: boolean;
   outlineError: string | null;
+  // New streaming props
+  streamingSections?: OutlineItem[];
+  isStreamingOutline?: boolean;
+  outlineProgress?: { current: number; total: number } | null;
 }
 
 export function ReviewStep({
@@ -34,19 +38,26 @@ export function ReviewStep({
   outline: generatedOutline,
   isLoadingOutline,
   outlineError,
+  streamingSections = [],
+  isStreamingOutline = false,
+  outlineProgress = null,
 }: ReviewStepProps) {
   const tutorName = character?.name || customCharacter || "Custom Tutor";
   const tutorDescription = character?.teachingStyle || "A personalized AI tutor";
 
-  // Use outline from props (API) or fallback to empty
+  // Use outline from props (API) or streaming sections, or fallback to empty
+  // Prefer streaming sections while streaming is in progress for progressive UI
   const [outline, setOutline] = useState<OutlineItem[]>(generatedOutline?.sections || []);
   
-  // Update outline when API data arrives
+  // Update outline when API data arrives or streaming sections update
   useEffect(() => {
     if (generatedOutline?.sections) {
       setOutline(generatedOutline.sections);
+    } else if (isStreamingOutline && streamingSections.length > 0) {
+      // During streaming, show sections as they arrive
+      setOutline(streamingSections);
     }
-  }, [generatedOutline]);
+  }, [generatedOutline, streamingSections, isStreamingOutline]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
@@ -198,15 +209,23 @@ export function ReviewStep({
               <div>
                 <SectionLabel className="mb-0.5">Course Outline</SectionLabel>
                 <HelpText className="text-xs">
-                  {isLoadingOutline ? "Generating..." : "AI-generated • Click to edit"}
+                  {isStreamingOutline 
+                    ? `Generating${outlineProgress ? ` (${outlineProgress.current}/${outlineProgress.total})` : '...'}`
+                    : isLoadingOutline 
+                      ? "Generating..." 
+                      : "AI-generated • Click to edit"}
                 </HelpText>
               </div>
               <div className="text-xs text-muted-foreground bg-muted px-2 py-1">
-                {isLoadingOutline ? "..." : `${outline.length} sections`}
+                {isLoadingOutline || isStreamingOutline ? (
+                  outlineProgress ? `${outlineProgress.current}/${outlineProgress.total}` : "..."
+                ) : (
+                  `${outline.length} sections`
+                )}
               </div>
             </div>
             <div className="p-4 overflow-y-auto max-h-64 flex-1 scrollbar-thin">
-              {isLoadingOutline ? (
+              {isLoadingOutline && !isStreamingOutline && outline.length === 0 ? (
                 <div className="flex items-center justify-center h-32">
                   <div className="text-center">
                     <div className="animate-spin w-6 h-6 border-2 border-foreground border-t-transparent rounded-full mx-auto mb-2" />
@@ -226,7 +245,20 @@ export function ReviewStep({
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {outline.map(item => renderOutlineItem(item))}
+                  {outline.map((item, index) => (
+                    <div 
+                      key={item.id} 
+                      className={isStreamingOutline && index === outline.length - 1 ? 'animate-pulse' : ''}
+                    >
+                      {renderOutlineItem(item)}
+                    </div>
+                  ))}
+                  {isStreamingOutline && (
+                    <div className="flex items-center gap-2 py-2 text-muted-foreground">
+                      <div className="animate-spin w-3 h-3 border border-foreground border-t-transparent rounded-full" />
+                      <span className="text-xs">Loading more sections...</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -272,10 +304,12 @@ export function ReviewStep({
           </button>
           <button
             onClick={() => onStart(outline)}
-            disabled={isLoadingOutline || outline.length === 0}
+            disabled={(isLoadingOutline && !isStreamingOutline) || outline.length === 0}
             className="px-6 py-3 bg-foreground text-background font-semibold hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoadingOutline ? "Preparing..." : "Start Learning →"}
+            {isLoadingOutline && !isStreamingOutline ? "Preparing..." : 
+             isStreamingOutline ? `Start Learning (${outline.length} sections ready) →` :
+             "Start Learning →"}
           </button>
         </div>
       </BlurFade>

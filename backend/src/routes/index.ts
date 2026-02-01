@@ -8,3 +8,4 @@ export { progressRoutes } from './progress';
 export { expertsRoutes } from './experts';
 export { outlineRoutes } from './outlines';
 export { mcpRoutes } from './mcp';
+export { precacheRoutes } from './precache';
