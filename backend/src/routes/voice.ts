@@ -259,14 +259,10 @@ voiceRoutes.get('/voices', (c) => {
  */
 voiceRoutes.post('/session', async (c) => {
   try {
-    const apiKey = c.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return c.json({ error: 'OPENAI_API_KEY not configured' }, 500);
+    const elevenLabsKey = c.env.ELEVENLABS_API_KEY;
+    if (!elevenLabsKey) {
+      return c.json({ error: 'ELEVENLABS_API_KEY not configured' }, 500);
     }
-
-    // Note: For ElevenLabs agent, we'd use ELEVENLABS_API_KEY
-    // For MVP, using OPENAI_API_KEY as placeholder - should be configured separately
-    const elevenLabsKey = c.env.OPENAI_API_KEY; // TODO: Use actual ELEVENLABS_API_KEY from env
 
     const body = (await c.req.json()) as {
       courseCode: string;

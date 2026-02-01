@@ -68,25 +68,35 @@ export function CourseOutlineSidebar({
               onSectionClick?.(item.id);
             }}
             className={cn(
+              "!h-auto min-h-8 py-2 !overflow-visible",
               level > 0 && "ml-4",
               item.isCompleted && "opacity-60",
               isActive && "bg-accent"
             )}
+            style={{ overflow: 'visible' }}
           >
-            <span className="text-xs font-mono text-muted-foreground">
+            <span className="text-xs font-mono text-muted-foreground shrink-0 self-start mt-0.5">
               {item.number}
             </span>
-            <span className={cn(
-              "flex-1",
-              item.isCompleted && "line-through text-muted-foreground",
-              isActive && "font-medium"
-            )}>
+            <span 
+              className={cn(
+                "flex-1 leading-snug",
+                item.isCompleted && "line-through text-muted-foreground",
+                isActive && "font-medium"
+              )}
+              style={{ 
+                whiteSpace: 'normal', 
+                overflow: 'visible',
+                textOverflow: 'clip',
+                wordBreak: 'break-word'
+              }}
+            >
               {item.title}
             </span>
             {hasChildren && (
               <ChevronRight
                 className={cn(
-                  "h-4 w-4 transition-transform",
+                  "h-4 w-4 transition-transform shrink-0 self-start mt-0.5",
                   isExpanded && "rotate-90"
                 )}
               />
