@@ -15,7 +15,8 @@
 	},
 	// Workers AI binding
 	"ai": {
-		"binding": "AI"
+		"binding": "AI",
+		"remote": true
 	},
 	// D1 Database
 	"d1_databases": [

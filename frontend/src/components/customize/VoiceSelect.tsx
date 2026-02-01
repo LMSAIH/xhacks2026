@@ -190,11 +190,9 @@ function VoiceCard({
             <span className={`text-[10px] px-1.5 py-0.5 rounded ${
               isSelected 
                 ? "bg-background/20 text-background" 
-                : voice.gender === "female" 
-                  ? "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300" 
-                  : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                : "bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300"
             }`}>
-              {voice.gender === "female" ? "F" : "M"}
+              {voice.gender === "female" ? "Feminine" : "Masculine"}
             </span>
           </div>
           <div className={`text-xs mb-1 ${isSelected ? "text-background/70" : "text-muted-foreground"}`}>
