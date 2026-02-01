@@ -455,3 +455,56 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* BlockNote slash menu - ensure solid background */
+.bn-suggestion-menu,
+.bn-slash-menu,
+[data-bn-suggestion-menu],
+div[class*="mantine-Menu-dropdown"],
+div[class*="bn-container"] [role="menu"],
+div[class*="bn-container"] [role="listbox"] {
+  background-color: hsl(var(--popover)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* BlockNote menu items */
+.bn-suggestion-menu-item,
+div[class*="bn-container"] [role="menuitem"],
+div[class*="bn-container"] [role="option"] {
+  background-color: transparent !important;
+}
+
+.bn-suggestion-menu-item:hover,
+.bn-suggestion-menu-item[data-hovered="true"],
+div[class*="bn-container"] [role="menuitem"]:hover,
+div[class*="bn-container"] [role="option"]:hover {
+  background-color: hsl(var(--accent)) !important;
+}
+
+/* Ensure BlockNote editor has proper background */
+.bn-editor,
+.bn-container,
+[data-bn-editor] {
+  background-color: transparent !important;
+}
+
+/* Prose styles for markdown in AI responses */
+.prose code {
+  background-color: hsl(var(--muted));
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+}
+
+.prose pre {
+  background-color: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.375rem;
+}
+
+.prose pre code {
+  background-color: transparent;
+  padding: 0;
+}

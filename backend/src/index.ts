@@ -11,6 +11,7 @@ import {
   progressRoutes,
   expertsRoutes,
   outlineRoutes,
+  mcpRoutes,
 } from './routes';
 
 // Export Durable Objects
@@ -39,5 +40,6 @@ app.route('/api/admin', adminRoutes);
 app.route('/api/progress', progressRoutes);
 app.route('/api/experts', expertsRoutes);
 app.route('/api/outlines', outlineRoutes);
+app.route('/api/mcp', mcpRoutes);
 
 export default app;

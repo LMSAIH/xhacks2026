@@ -7,3 +7,4 @@ export { adminRoutes } from './admin';
 export { progressRoutes } from './progress';
 export { expertsRoutes } from './experts';
 export { outlineRoutes } from './outlines';
+export { mcpRoutes } from './mcp';
