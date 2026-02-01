@@ -157,11 +157,14 @@ export default function CustomizePage() {
       state: {
         topic: displayTopic,
         sections,
-        character: selectedCharacter || {
-          id: "custom",
-          name: customCharacterDescription || "Custom Tutor",
+        character: {
+          id: selectedCharacter?.id || "custom",
+          name: selectedCharacter?.name || customCharacterDescription || "AI Tutor",
+          title: selectedCharacter?.title || "Your Personal Teacher",
+          image: selectedCharacter?.image,
+          voice: selectedVoice?.id,
+          personality: selectedCharacter?.teachingStyle || "helpful, patient, and encouraging",
         },
-        voice: selectedVoice,
         outlineId: generatedOutline?.id,
       },
     });

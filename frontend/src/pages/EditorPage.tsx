@@ -2,8 +2,8 @@ import { useState, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { NotesEditor } from "@/components/NotesEditor";
 import { CourseOutlineSidebar, type OutlineSection } from "@/components/course-outline-sidebar";
-import { LectureSidebar, type ChatMessage } from "@/components/lecture-sidebar";
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { LectureSidebar } from "@/components/lecture-sidebar";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 
@@ -16,6 +16,8 @@ interface EditorPageState {
     name: string;
     title?: string;
     image?: string;
+    voice?: string;
+    personality?: string;
   };
 }
 
@@ -174,14 +176,6 @@ export function EditorPage() {
 
   const activeSectionTitle = findSectionTitle(activeSectionId, sections) || topic;
 
-  // Convert transcript to chat messages format
-  const chatMessages: ChatMessage[] = transcript.map((msg) => ({
-    id: msg.id,
-    text: msg.text,
-    isUser: msg.isUser,
-    timestamp: new Date(msg.timestamp),
-  }));
-
   const handleDownloadTranscript = () => {
     if (transcript.length === 0) return;
     
@@ -251,10 +245,11 @@ export function EditorPage() {
         {/* Right Sidebar - AI Assistant */}
         <div className="relative">
           <LectureSidebar
-            messages={chatMessages}
             isOpen={rightSidebarOpen}
             onToggle={() => setRightSidebarOpen(!rightSidebarOpen)}
             character={character}
+            topic={topic}
+            sectionTitle={activeSectionTitle}
           />
         </div>
       </div>

@@ -5,6 +5,8 @@ import {
   configRoutes,
   courseRoutes,
   voiceRoutes,
+  editorVoiceRoutes,
+  editorChatRoutes,
   adminRoutes,
   progressRoutes,
   expertsRoutes,
@@ -13,6 +15,7 @@ import {
 
 // Export Durable Objects
 export { VoiceTeacherSession } from './durable-objects/voice-session';
+export { EditorVoiceSession } from './durable-objects/editor-voice-session';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -30,6 +33,8 @@ app.get('/health', (c) => c.json({ status: 'healthy' }));
 app.route('/api', configRoutes);
 app.route('/api/courses', courseRoutes);
 app.route('/api/voice', voiceRoutes);
+app.route('/api/editor-voice', editorVoiceRoutes);
+app.route('/api/editor-chat', editorChatRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api/progress', progressRoutes);
 app.route('/api/experts', expertsRoutes);

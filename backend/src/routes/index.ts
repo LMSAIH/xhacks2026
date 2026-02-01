@@ -1,6 +1,8 @@
 export { configRoutes } from './config';
 export { courseRoutes } from './courses';
 export { voiceRoutes } from './voice';
+export { editorVoiceRoutes } from './editor-voice';
+export { editorChatRoutes } from './editor-chat';
 export { adminRoutes } from './admin';
 export { progressRoutes } from './progress';
 export { expertsRoutes } from './experts';

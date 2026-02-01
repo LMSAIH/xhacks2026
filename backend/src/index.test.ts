@@ -53,6 +53,11 @@ function createMockEnv(): Env {
       idFromString: vi.fn().mockReturnValue({ toString: () => 'test-id' }),
       get: vi.fn().mockReturnValue(mockDOInstance),
     } as any,
+    EDITOR_VOICE_SESSION: {
+      idFromName: vi.fn().mockReturnValue({ toString: () => 'test-id' }),
+      idFromString: vi.fn().mockReturnValue({ toString: () => 'test-id' }),
+      get: vi.fn().mockReturnValue(mockDOInstance),
+    } as any,
   };
 }
 

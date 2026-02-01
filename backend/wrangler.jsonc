@@ -47,6 +47,10 @@
 			{
 				"name": "VOICE_SESSION",
 				"class_name": "VoiceTeacherSession"
+			},
+			{
+				"name": "EDITOR_VOICE_SESSION",
+				"class_name": "EditorVoiceSession"
 			}
 		]
 	},
@@ -56,6 +60,12 @@
 			"tag": "v1",
 			"new_classes": [
 				"VoiceTeacherSession"
+			]
+		},
+		{
+			"tag": "v2",
+			"new_classes": [
+				"EditorVoiceSession"
 			]
 		}
 	],
