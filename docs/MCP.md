@@ -40,7 +40,75 @@ The MCP server is a standalone Node.js application that exposes tutoring capabil
 
 LearnLM provides an MCP server that integrates with AI coding assistants like VS Code Copilot, Cursor, Claude Desktop, and OpenCode. Once configured, you can ask your AI assistant to search courses, get tutoring help, critique your notes, and more.
 
-### Prerequisites
+### Option 1: Remote Server (Recommended)
+
+The easiest way to use LearnLM is via our hosted MCP server at `https://mcp.learn-lm.com`. No local setup required!
+
+#### VS Code (GitHub Copilot) - Remote
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "learnlm": {
+        "type": "http",
+        "url": "https://mcp.learn-lm.com/mcp"
+      }
+    }
+  }
+}
+```
+
+#### Cursor - Remote
+
+Edit `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "learnlm": {
+      "type": "http",
+      "url": "https://mcp.learn-lm.com/mcp"
+    }
+  }
+}
+```
+
+#### Claude Desktop - Remote
+
+```json
+{
+  "mcpServers": {
+    "learnlm": {
+      "type": "http",
+      "url": "https://mcp.learn-lm.com/mcp"
+    }
+  }
+}
+```
+
+#### OpenCode - Remote
+
+Add to `opencode.json`:
+
+```json
+{
+  "mcp": {
+    "learnlm": {
+      "type": "remote",
+      "url": "https://mcp.learn-lm.com/mcp"
+    }
+  }
+}
+```
+
+---
+
+### Option 2: Local Server (Self-Hosted)
+
+If you prefer to run the MCP server locally, follow these steps:
+
+#### Prerequisites
 
 1. **Build the MCP server** (one-time setup):
    ```bash
@@ -60,7 +128,9 @@ LearnLM provides an MCP server that integrates with AI coding assistants like VS
 
 ---
 
-### VS Code (GitHub Copilot)
+#### VS Code (GitHub Copilot) - Local
+
+#### VS Code (GitHub Copilot) - Local
 
 1. Open VS Code Settings (`Ctrl+,` or `Cmd+,`)
 2. Search for "mcp" 
@@ -88,7 +158,9 @@ LearnLM provides an MCP server that integrates with AI coding assistants like VS
 
 ---
 
-### Cursor
+#### Cursor - Local
+
+#### Cursor - Local
 
 1. Open Cursor Settings (`Ctrl+,` or `Cmd+,`)
 2. Go to **Features** > **MCP Servers**
@@ -121,7 +193,9 @@ Or edit `~/.cursor/mcp.json` directly:
 
 ---
 
-### Claude Desktop
+#### Claude Desktop - Local
+
+#### Claude Desktop - Local
 
 1. Open the Claude Desktop config file:
    - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -149,7 +223,9 @@ Or edit `~/.cursor/mcp.json` directly:
 
 ---
 
-### OpenCode
+#### OpenCode - Local
+
+#### OpenCode - Local
 
 Add to your project's `opencode.json`:
 
@@ -171,7 +247,9 @@ Or add globally to `~/.opencode/config.json`.
 
 ---
 
-### Windsurf
+#### Windsurf - Local
+
+#### Windsurf - Local
 
 1. Open Windsurf Settings
 2. Navigate to **AI** > **MCP Servers**
@@ -191,7 +269,7 @@ Or add globally to `~/.opencode/config.json`.
 
 ---
 
-## Environment Variables
+## Local Server Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|

@@ -111,7 +111,24 @@ learnlm/
 
 LearnLM includes an MCP server that integrates with AI coding assistants (VS Code, Cursor, Claude Desktop, OpenCode). Get tutoring help, search courses, and critique notes directly from your IDE.
 
-### Quick Setup
+### Quick Setup (Remote - Recommended)
+
+Use our hosted MCP server - no local setup required:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "learnlm": {
+        "type": "http",
+        "url": "https://mcp.learn-lm.com/mcp"
+      }
+    }
+  }
+}
+```
+
+### Local Setup (Self-Hosted)
 
 1. **Build the server:**
    ```bash
