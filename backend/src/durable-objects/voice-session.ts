@@ -13,6 +13,7 @@ import {
 const CHUNK_SIZE = 4096; // Smaller chunks = faster first byte
 const MAX_HISTORY = 6; // Fewer messages = faster LLM
 const MAX_TOKENS = 100; // Shorter responses = faster TTS
+const AUTO_INIT_TIMEOUT_MS = 5000; // Auto-initialize after 5 seconds if no start_session
 
 interface SessionConfig {
   courseCode: string;
@@ -27,9 +28,11 @@ interface ConversationMessage {
 
 export class VoiceTeacherSession extends DurableObject<Env> {
   private config: SessionConfig | null = null;
-  private history: ConversationMessage[] = [];
+  private history: ConversationMessage[] = [];  
   private isProcessing = false;
   private abortController: AbortController | null = null;
+  private initTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private connectedWs: WebSocket | null = null;
 
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get('Upgrade') !== 'websocket') {
@@ -39,6 +42,7 @@ export class VoiceTeacherSession extends DurableObject<Env> {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
+    this.connectedWs = server;
     
     // Send ready with available voices
     this.send(server, { 
@@ -46,6 +50,15 @@ export class VoiceTeacherSession extends DurableObject<Env> {
       sessionId: this.ctx.id.toString(),
       voices: Object.keys(VOICES),
     });
+
+    // Start auto-initialization timeout
+    // If no start_session received within timeout, auto-init with defaults
+    this.initTimeoutId = setTimeout(() => {
+      if (!this.config && this.connectedWs) {
+        console.log('Auto-initializing session with defaults (no start_session received)');
+        this.autoInitSession(this.connectedWs);
+      }
+    }, AUTO_INIT_TIMEOUT_MS);
     
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -96,6 +109,12 @@ export class VoiceTeacherSession extends DurableObject<Env> {
     customInstructions?: string;
     userId?: string;
   }) {
+    // Clear auto-init timeout since client sent start_session
+    if (this.initTimeoutId) {
+      clearTimeout(this.initTimeoutId);
+      this.initTimeoutId = null;
+    }
+
     const courseCode = data.courseCode || 'GENERAL';
     const voice = data.voice || getDefaultVoiceForCourse(courseCode);
     
@@ -112,6 +131,26 @@ export class VoiceTeacherSession extends DurableObject<Env> {
       customInstructions: data.customInstructions,
     });
 
+    this.history = [{ role: 'system', content: systemPrompt }];
+
+    this.send(ws, { 
+      type: 'session_started', 
+      sessionId: this.ctx.id.toString(),
+      voice: voice,
+    });
+  }
+
+  private autoInitSession(ws: WebSocket) {
+    // Auto-initialize with GENERAL course and default voice
+    const courseCode = 'GENERAL';
+    const voice = getDefaultVoiceForCourse(courseCode);
+    
+    this.config = {
+      courseCode,
+      voice,
+    };
+
+    const systemPrompt = buildSystemPrompt({ courseCode });
     this.history = [{ role: 'system', content: systemPrompt }];
 
     this.send(ws, { 
@@ -330,6 +369,13 @@ export class VoiceTeacherSession extends DurableObject<Env> {
   async webSocketClose() {
     this.isProcessing = false;
     this.abortController?.abort();
+    this.connectedWs = null;
+    
+    // Clear auto-init timeout on disconnect
+    if (this.initTimeoutId) {
+      clearTimeout(this.initTimeoutId);
+      this.initTimeoutId = null;
+    }
   }
 
   async webSocketError(ws: WebSocket, error: unknown) {
