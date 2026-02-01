@@ -44,39 +44,46 @@ async function isImageUrlValid(url?: string): Promise<boolean> {
 }
 
 /**
- * Generate an image of the character using Leonardo AI (lucid-origin model)
- * Returns a data URL with the generated image
+ * Generate an image of the character using OpenAI DALL-E 3
+ * Returns a URL to the generated image
  */
 async function searchCharacterImage(env: Env, name: string): Promise<string> {
   try {
+    const apiKey = env.OPENAI_API_KEY;
+    if (!apiKey) {
+      console.error('OpenAI API key not configured for image generation');
+      return '';
+    }
+
     const prompt = `Minimalistic simplified portrait of ${name}, flat design, clean lines, black and white only, vector style, modern art. No text, no words, no letters in the image.`;
 
-    const response = await env.AI.run('@cf/black-forest-labs/flux-2-klein-9b', {
-      prompt: prompt,
+    const response = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'dall-e-3',
+        prompt: prompt,
+        n: 1,
+        size: '1024x1024',
+        quality: 'standard',
+      }),
     });
 
-    // Log the response type for debugging
-    console.log('Flux response type:', typeof response);
-    console.log('Flux response keys:', Object.keys(response || {}));
-
-    // Check if response has an image property (base64 string)
-    if (response && typeof response === 'object' && 'image' in response) {
-      const imageData = response.image;
-      if (typeof imageData === 'string') {
-        // It's a base64 string
-        return `data:image/png;base64,${imageData}`;
-      }
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('OpenAI image generation error:', error);
+      return '';
     }
 
-    // If not a string, it might be raw binary data - try to convert
-    if (response instanceof ArrayBuffer) {
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(response)));
-      return `data:image/png;base64,${base64}`;
-    }
+    const data = await response.json() as { data: Array<{ url: string }> };
+    const imageUrl = data.data?.[0]?.url;
 
-    return '';
+    return imageUrl || '';
   } catch (error) {
-    console.error('Error generating image with Flux:', error);
+    console.error('Error generating image with OpenAI DALL-E 3:', error);
     return '';
   }
 }
@@ -340,6 +347,14 @@ export async function generateCharactersByTopic(env: Env, topic: string): Promis
       };
     }
 
+    const apiKey = env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return {
+        success: false,
+        error: 'OpenAI API key is not configured',
+      };
+    }
+
     const prompt = `You are a knowledge assistant. Generate information about 6 famous historical characters related to the topic: "${topic}"
 
 Return ONLY valid JSON array with exactly 6 objects (no markdown, no code blocks). Each object must have these exact fields:
@@ -357,15 +372,41 @@ Return ONLY valid JSON array with exactly 6 objects (no markdown, no code blocks
 
 Make sure the characters are diverse and well-known in the "${topic}" field.`;
 
-    // Call Mistral AI to generate 6 characters
-    const response = await env.AI.run('@cf/mistral/mistral-7b-instruct-v0.1', {
-      prompt: prompt,
-      max_tokens: 4096,
+    // Call OpenAI API to generate 6 characters
+    const apiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a knowledge assistant. Return ONLY valid JSON responses.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 4096,
+      }),
     });
 
-    console.log('Mistral response type:', typeof response);
-    
-    const responseText = (response as { response?: string }).response || '';
+    if (!apiResponse.ok) {
+      const error = await apiResponse.text();
+      console.error('OpenAI API error:', error);
+      return {
+        success: false,
+        error: 'Failed to generate characters from OpenAI',
+      };
+    }
+
+    const data = await apiResponse.json() as { choices: Array<{ message: { content: string } }> };
+    const responseText = data.choices?.[0]?.message?.content || '';
     
     if (!responseText) {
       return {
