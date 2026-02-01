@@ -9,6 +9,8 @@ export interface ChatMessage {
   text: string;
   isUser: boolean;
   timestamp: Date;
+  isCommand?: boolean;
+  commandType?: string;
 }
 
 export interface EditorChatConfig {
@@ -17,6 +19,20 @@ export interface EditorChatConfig {
   professorPersonality?: string;
   topic?: string;
   sectionTitle?: string;
+}
+
+// Command result from backend
+export interface CommandResult {
+  commandType: string;
+  data?: unknown;
+  response: string;
+}
+
+interface UseEditorChatOptions {
+  // Callback when a slash command is executed
+  onCommand?: (result: CommandResult) => void;
+  // Function to get current notes content for commands like /critique
+  getNotesContent?: () => string;
 }
 
 interface UseEditorChatReturn {
@@ -33,6 +49,7 @@ interface UseEditorChatReturn {
   stopAudio: () => void;
   clearHistory: () => Promise<void>;
   updateSection: (sectionTitle: string) => Promise<void>;
+  updateNotes: (notes: string) => Promise<void>;
 }
 
 // Browser Speech Recognition types
@@ -78,7 +95,9 @@ declare global {
   }
 }
 
-export function useEditorChat(): UseEditorChatReturn {
+export function useEditorChat(options: UseEditorChatOptions = {}): UseEditorChatReturn {
+  const { onCommand, getNotesContent } = options;
+  
   const [isReady, setIsReady] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -90,6 +109,14 @@ export function useEditorChat(): UseEditorChatReturn {
   const audioChunksRef = useRef<Blob[]>([]);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const onCommandRef = useRef(onCommand);
+  const getNotesContentRef = useRef(getNotesContent);
+  
+  // Keep refs updated
+  useEffect(() => {
+    onCommandRef.current = onCommand;
+    getNotesContentRef.current = getNotesContent;
+  }, [onCommand, getNotesContent]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -137,6 +164,22 @@ export function useEditorChat(): UseEditorChatReturn {
   const sendMessage = useCallback(async (text: string) => {
     if (!sessionIdRef.current || !text.trim()) return;
     
+    // Before sending, update notes content for potential slash commands
+    if (getNotesContentRef.current) {
+      const notes = getNotesContentRef.current();
+      if (notes) {
+        try {
+          await fetch(`${BACKEND_URL}/api/editor-chat/session/${sessionIdRef.current}/notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notes }),
+          });
+        } catch (e) {
+          console.error('Failed to update notes:', e);
+        }
+      }
+    }
+    
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       text: text.trim(),
@@ -164,9 +207,20 @@ export function useEditorChat(): UseEditorChatReturn {
         text: data.response,
         isUser: false,
         timestamp: new Date(),
+        isCommand: data.isCommand,
+        commandType: data.commandType,
       };
       
       setMessages(prev => [...prev, aiMessage]);
+      
+      // If this was a command, trigger the callback
+      if (data.isCommand && onCommandRef.current) {
+        onCommandRef.current({
+          commandType: data.commandType,
+          data: data.commandData,
+          response: data.response,
+        });
+      }
     } catch (e) {
       setError(`Failed to send: ${e}`);
     } finally {
@@ -254,6 +308,22 @@ export function useEditorChat(): UseEditorChatReturn {
         setVoiceState('processing');
         
         try {
+          // Before sending voice, update notes content for potential slash commands
+          if (getNotesContentRef.current && sessionIdRef.current) {
+            const notes = getNotesContentRef.current();
+            if (notes) {
+              try {
+                await fetch(`${BACKEND_URL}/api/editor-chat/session/${sessionIdRef.current}/notes`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ notes }),
+                });
+              } catch (e) {
+                console.error('Failed to update notes:', e);
+              }
+            }
+          }
+          
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           
           // Send as FormData with binary audio
@@ -279,6 +349,8 @@ export function useEditorChat(): UseEditorChatReturn {
             text: data.transcript,
             isUser: true,
             timestamp: new Date(),
+            isCommand: data.isCommand,
+            commandType: data.commandType,
           };
           
           // Add AI response
@@ -287,9 +359,20 @@ export function useEditorChat(): UseEditorChatReturn {
             text: data.response,
             isUser: false,
             timestamp: new Date(),
+            isCommand: data.isCommand,
+            commandType: data.commandType,
           };
           
           setMessages(prev => [...prev, userMessage, aiMessage]);
+          
+          // If this was a command, trigger the callback
+          if (data.isCommand && onCommandRef.current) {
+            onCommandRef.current({
+              commandType: data.commandType,
+              data: data.commandData,
+              response: data.response,
+            });
+          }
           
           // Play audio response
           if (data.audio) {
@@ -367,6 +450,20 @@ export function useEditorChat(): UseEditorChatReturn {
     }
   }, []);
 
+  const updateNotes = useCallback(async (notes: string) => {
+    if (!sessionIdRef.current) return;
+    
+    try {
+      await fetch(`${BACKEND_URL}/api/editor-chat/session/${sessionIdRef.current}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes }),
+      });
+    } catch (e) {
+      console.error('Failed to update notes:', e);
+    }
+  }, []);
+
   return {
     isReady,
     voiceState,
@@ -380,5 +477,6 @@ export function useEditorChat(): UseEditorChatReturn {
     stopAudio,
     clearHistory,
     updateSection,
+    updateNotes,
   };
 }

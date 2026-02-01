@@ -14,7 +14,7 @@ import { filterSuggestionItems } from '@blocknote/core/extensions';
 import katex from 'katex';
 // @ts-expect-error no types for react-katex
 import { BlockMath, InlineMath } from 'react-katex';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { ReactSketchCanvas, type ReactSketchCanvasRef } from 'react-sketch-canvas';
 import { getNotesSlashMenuItems } from '@/components/note-editor-menu';
 import * as Button from '@/components/ui/button';
@@ -971,13 +971,53 @@ interface NotesEditorProps {
   sectionTitle: string;
 }
 
+// Ref handle exposed to parent components
+export interface NotesEditorHandle {
+  getContent: () => string;
+  insertCritiqueBlock: (critiqueData: unknown) => void;
+  insertResponseBlock: (toolType: string, prompt: string, response: string) => void;
+}
+
 // Sanitize section ID for use as localStorage key
 function sanitizeStorageKey(id: string): string {
   return id.replace(/[^a-zA-Z0-9-_]/g, '_');
 }
 
+// Extract plain text from editor blocks (shared helper)
+function extractEditorContent(document: Array<{ type: string; content?: unknown; props?: Record<string, unknown> }>): string {
+  const extractText = (content: unknown): string => {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content.map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+          if ('text' in item) return (item as { text: string }).text;
+          if ('content' in item) return extractText((item as { content: unknown }).content);
+        }
+        return '';
+      }).join('');
+    }
+    return '';
+  };
+  
+  return document
+    .map((block) => {
+      // Skip aiResponse blocks and pen blocks
+      if (block.type === 'aiResponse' || block.type === 'aiCritique' || block.type === 'pen') return '';
+      // Get latex from math blocks
+      if (block.type === 'math' && block.props?.latex) {
+        return `$$${block.props.latex}$$`;
+      }
+      return extractText(block.content);
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 // Inner component that gets remounted when sectionId changes
-function NotesEditorInner({ sectionId, sectionTitle }: NotesEditorProps) {
+const NotesEditorInner = forwardRef<NotesEditorHandle, NotesEditorProps>(
+  function NotesEditorInner({ sectionId, sectionTitle }, ref) {
   const { resolvedTheme } = useTheme();
   const storageKey = `notes-section-${sanitizeStorageKey(sectionId)}`;
   
@@ -1013,6 +1053,50 @@ function NotesEditorInner({ sectionId, sectionTitle }: NotesEditorProps) {
     initialContent: getInitialContent(),
   });
 
+  // Expose methods to parent via ref
+  useImperativeHandle(ref, () => ({
+    getContent: () => {
+      return extractEditorContent(editor.document as Array<{ type: string; content?: unknown; props?: Record<string, unknown> }>);
+    },
+    insertCritiqueBlock: (critiqueData: unknown) => {
+      // Find the last block to insert after
+      const lastBlock = editor.document[editor.document.length - 1];
+      if (lastBlock) {
+        editor.insertBlocks(
+          [{
+            type: 'aiCritique' as const,
+            props: {
+              notes: '',
+              critiqueData: JSON.stringify(critiqueData),
+              isLoading: false,
+            },
+          }],
+          lastBlock.id,
+          'after'
+        );
+      }
+    },
+    insertResponseBlock: (toolType: string, prompt: string, response: string) => {
+      // Find the last block to insert after
+      const lastBlock = editor.document[editor.document.length - 1];
+      if (lastBlock) {
+        editor.insertBlocks(
+          [{
+            type: 'aiResponse' as const,
+            props: {
+              prompt,
+              response,
+              toolType,
+              isLoading: false,
+            },
+          }],
+          lastBlock.id,
+          'after'
+        );
+      }
+    },
+  }), [editor]);
+
   // Save to localStorage on change
   useEffect(() => {
     const saveContent = () => {
@@ -1046,10 +1130,11 @@ function NotesEditorInner({ sectionId, sectionTitle }: NotesEditorProps) {
       </BlockNoteView>
     </div>
   );
-}
+});
 
 // Wrapper component that forces remount when section changes
-export function NotesEditor({ sectionId, sectionTitle }: NotesEditorProps) {
+export const NotesEditor = forwardRef<NotesEditorHandle, NotesEditorProps>(
+  function NotesEditor({ sectionId, sectionTitle }, ref) {
   // Use both sectionId and sectionTitle in key to ensure remount on either change
-  return <NotesEditorInner key={`${sectionId}-${sectionTitle}`} sectionId={sectionId} sectionTitle={sectionTitle} />;
-}
+  return <NotesEditorInner key={`${sectionId}-${sectionTitle}`} ref={ref} sectionId={sectionId} sectionTitle={sectionTitle} />;
+});

@@ -14,9 +14,10 @@ import {
   Send,
   Loader2,
   Circle,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEditorChat } from "@/hooks/use-editor-chat";
+import { useEditorChat, type CommandResult } from "@/hooks/use-editor-chat";
 
 export interface Character {
   id: string;
@@ -33,6 +34,9 @@ interface LectureSidebarProps {
   character?: Character;
   topic?: string;
   sectionTitle?: string;
+  // For voice slash commands
+  getNotesContent?: () => string;
+  onCommand?: (result: CommandResult) => void;
 }
 
 const KEYBINDS = [
@@ -47,6 +51,8 @@ export function LectureSidebar({
   character,
   topic = "Learning Session",
   sectionTitle = "Introduction",
+  getNotesContent,
+  onCommand,
 }: LectureSidebarProps) {
   const [activeTab, setActiveTab] = useState<"chat" | "commands">("chat");
   const [textInput, setTextInput] = useState("");
@@ -66,7 +72,10 @@ export function LectureSidebar({
     stopAudio,
     clearHistory,
     updateSection,
-  } = useEditorChat();
+  } = useEditorChat({
+    onCommand,
+    getNotesContent,
+  });
 
   const professorName = character?.name || "AI Tutor";
   const professorTitle = character?.title || "Your Teacher";
@@ -276,13 +285,20 @@ export function LectureSidebar({
                         key={message.id}
                         className={cn(
                           "text-sm p-2.5",
-                          message.isUser ? "bg-primary/10 ml-4" : "bg-muted mr-4"
+                          message.isUser ? "bg-primary/10 ml-4" : "bg-muted mr-4",
+                          message.isCommand && !message.isUser && "border-l-2 border-primary"
                         )}
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-[10px] font-medium text-muted-foreground">
                             {message.isUser ? "You" : professorName}
                           </span>
+                          {message.isCommand && (
+                            <span className="text-[10px] bg-primary/20 text-primary px-1 py-0.5 rounded flex items-center gap-1">
+                              <Sparkles className="h-2 w-2" />
+                              {message.commandType}
+                            </span>
+                          )}
                           <span className="text-[10px] text-muted-foreground/60">
                             {message.timestamp.toLocaleTimeString([], {
                               hour: "2-digit",
@@ -354,6 +370,34 @@ export function LectureSidebar({
                         <span>Clear chat history</span>
                       </button>
                     </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                      <Sparkles className="h-3 w-3" />
+                      Voice Commands
+                    </h3>
+                    <div className="space-y-1 text-xs">
+                      <div className="px-2 py-1.5 bg-muted/30 rounded">
+                        <kbd className="font-mono text-primary">"slash critique"</kbd>
+                        <p className="text-muted-foreground mt-0.5">Review your notes with suggestions</p>
+                      </div>
+                      <div className="px-2 py-1.5 bg-muted/30 rounded">
+                        <kbd className="font-mono text-primary">"slash explain [topic]"</kbd>
+                        <p className="text-muted-foreground mt-0.5">Get an explanation added to notes</p>
+                      </div>
+                      <div className="px-2 py-1.5 bg-muted/30 rounded">
+                        <kbd className="font-mono text-primary">"slash ask [question]"</kbd>
+                        <p className="text-muted-foreground mt-0.5">Ask a question, answer in notes</p>
+                      </div>
+                      <div className="px-2 py-1.5 bg-muted/30 rounded">
+                        <kbd className="font-mono text-primary">"slash formulas [topic]"</kbd>
+                        <p className="text-muted-foreground mt-0.5">Get formulas added to notes</p>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-2 px-2">
+                      Say "slash" followed by a command while recording
+                    </p>
                   </div>
 
                   <div>

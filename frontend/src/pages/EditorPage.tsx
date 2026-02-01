@@ -1,11 +1,12 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useLocation } from "react-router-dom";
-import { NotesEditor } from "@/components/NotesEditor";
+import { NotesEditor, type NotesEditorHandle } from "@/components/NotesEditor";
 import { CourseOutlineSidebar, type OutlineSection } from "@/components/course-outline-sidebar";
 import { LectureSidebar } from "@/components/lecture-sidebar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
+import type { CommandResult } from "@/hooks/use-editor-chat";
 
 interface EditorPageState {
   topic?: string;
@@ -161,6 +162,9 @@ export function EditorPage() {
 
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [activeSectionId, setActiveSectionId] = useState<string>(firstSectionId);
+  
+  // Ref to access the NotesEditor methods
+  const editorRef = useRef<NotesEditorHandle>(null);
 
   // Helper function to find section title by id
   const findSectionTitle = (id: string, items: OutlineSection[]): string | undefined => {
@@ -175,6 +179,38 @@ export function EditorPage() {
   };
 
   const activeSectionTitle = findSectionTitle(activeSectionId, sections) || topic;
+  
+  // Callback to get current notes content for voice commands
+  const getNotesContent = useCallback(() => {
+    return editorRef.current?.getContent() || '';
+  }, []);
+  
+  // Callback when a voice command is executed
+  const handleCommand = useCallback((result: CommandResult) => {
+    if (!editorRef.current) return;
+    
+    console.log('Voice command executed:', result.commandType, result);
+    
+    switch (result.commandType) {
+      case 'critique':
+        // Insert critique block with the structured data
+        if (result.data) {
+          editorRef.current.insertCritiqueBlock(result.data);
+        }
+        break;
+      case 'explain':
+      case 'ask':
+      case 'formulas':
+        // Insert response block
+        if (result.data && typeof result.data === 'object') {
+          const data = result.data as { question?: string; concept?: string; topic?: string; answer?: string; explanation?: string; formulas?: string };
+          const prompt = data.question || data.concept || data.topic || '';
+          const response = data.answer || data.explanation || data.formulas || result.response;
+          editorRef.current.insertResponseBlock(result.commandType, prompt, response);
+        }
+        break;
+    }
+  }, []);
 
   const handleDownloadTranscript = () => {
     if (transcript.length === 0) return;
@@ -235,6 +271,7 @@ export function EditorPage() {
             <div className="h-full min-h-full px-0 ">
                
               <NotesEditor 
+                ref={editorRef}
                 sectionId={activeSectionId} 
                 sectionTitle={activeSectionTitle}
               />
@@ -250,6 +287,8 @@ export function EditorPage() {
             character={character}
             topic={topic}
             sectionTitle={activeSectionTitle}
+            getNotesContent={getNotesContent}
+            onCommand={handleCommand}
           />
         </div>
       </div>

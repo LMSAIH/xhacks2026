@@ -5,6 +5,12 @@ import {
   VOICES,
   getSpeakerName,
 } from '../voices';
+import {
+  askQuestion,
+  explainConcept,
+  critiqueNotesWithDiff,
+  getFormulas,
+} from '../services/ai-tools';
 
 const editorChatRoutes = new Hono<{ Bindings: Env }>();
 
@@ -18,9 +24,141 @@ interface ChatSession {
     topic: string;
     sectionTitle: string;
   };
+  notesContent?: string; // Current notes content for commands
 }
 
 const sessions = new Map<string, ChatSession>();
+
+// Slash command patterns - detect "slash" spoken aloud
+const SLASH_COMMAND_PATTERNS = [
+  // "slash critique my notes" / "slash critique notes" / "slash critique"
+  { pattern: /^slash\s+critique(\s+my)?\s*(notes)?/i, command: 'critique' },
+  // "slash explain <topic>" 
+  { pattern: /^slash\s+explain\s+(.+)/i, command: 'explain', extractArg: true },
+  // "slash ask <question>"
+  { pattern: /^slash\s+ask\s+(.+)/i, command: 'ask', extractArg: true },
+  // "slash formulas <topic>" / "slash get formulas <topic>"
+  { pattern: /^slash\s+(get\s+)?formulas?\s+(.+)/i, command: 'formulas', extractArg: true, argIndex: 2 },
+];
+
+interface SlashCommand {
+  command: 'critique' | 'explain' | 'ask' | 'formulas';
+  argument?: string;
+}
+
+function parseSlashCommand(text: string): SlashCommand | null {
+  const normalized = text.trim().toLowerCase();
+  
+  for (const { pattern, command, extractArg, argIndex } of SLASH_COMMAND_PATTERNS) {
+    const match = normalized.match(pattern);
+    if (match) {
+      const result: SlashCommand = { command: command as SlashCommand['command'] };
+      if (extractArg && match[argIndex ?? 1]) {
+        result.argument = match[argIndex ?? 1].trim();
+      }
+      return result;
+    }
+  }
+  
+  return null;
+}
+
+// Execute a slash command and return the result
+async function executeSlashCommand(
+  env: Env,
+  cmd: SlashCommand,
+  notesContent?: string
+): Promise<{ 
+  response: string; 
+  commandType: string;
+  data?: unknown;
+  spokenResponse: string; // Shorter version for TTS
+}> {
+  switch (cmd.command) {
+    case 'critique': {
+      if (!notesContent || notesContent.trim().length < 10) {
+        return {
+          response: 'I need some notes to critique. Please add more content to your notes first.',
+          commandType: 'critique',
+          spokenResponse: "I need some notes to critique. Please add more content first.",
+        };
+      }
+      
+      const result = await critiqueNotesWithDiff(env, notesContent);
+      const suggestionCount = result.suggestions?.length || 0;
+      
+      return {
+        response: result.overallFeedback || 'Notes reviewed.',
+        commandType: 'critique',
+        data: result,
+        spokenResponse: suggestionCount > 0 
+          ? `I found ${suggestionCount} suggestion${suggestionCount === 1 ? '' : 's'} for your notes. ${result.overallFeedback || ''}`
+          : `Your notes look great! ${result.overallFeedback || ''}`,
+      };
+    }
+    
+    case 'explain': {
+      if (!cmd.argument) {
+        return {
+          response: 'What would you like me to explain?',
+          commandType: 'explain',
+          spokenResponse: 'What would you like me to explain?',
+        };
+      }
+      
+      const explanation = await explainConcept(env, cmd.argument);
+      return {
+        response: explanation,
+        commandType: 'explain',
+        data: { concept: cmd.argument, explanation },
+        spokenResponse: explanation.slice(0, 500), // Truncate for TTS
+      };
+    }
+    
+    case 'ask': {
+      if (!cmd.argument) {
+        return {
+          response: 'What would you like to ask?',
+          commandType: 'ask',
+          spokenResponse: 'What would you like to ask?',
+        };
+      }
+      
+      const answer = await askQuestion(env, cmd.argument);
+      return {
+        response: answer,
+        commandType: 'ask',
+        data: { question: cmd.argument, answer },
+        spokenResponse: answer.slice(0, 500), // Truncate for TTS
+      };
+    }
+    
+    case 'formulas': {
+      if (!cmd.argument) {
+        return {
+          response: 'What topic do you need formulas for?',
+          commandType: 'formulas',
+          spokenResponse: 'What topic do you need formulas for?',
+        };
+      }
+      
+      const formulas = await getFormulas(env, cmd.argument);
+      return {
+        response: formulas,
+        commandType: 'formulas',
+        data: { topic: cmd.argument, formulas },
+        spokenResponse: `Here are the key formulas for ${cmd.argument}. I've added them to your notes.`,
+      };
+    }
+    
+    default:
+      return {
+        response: 'Unknown command.',
+        commandType: 'unknown',
+        spokenResponse: 'Sorry, I didn\'t recognize that command.',
+      };
+  }
+}
 
 function buildSystemPrompt(config: ChatSession['config']): string {
   const { professorName, professorPersonality, topic, sectionTitle } = config;
@@ -88,6 +226,21 @@ editorChatRoutes.post('/session/:sessionId/section', async (c) => {
   return c.json({ success: true });
 });
 
+// Update notes content (for slash commands that need note context)
+editorChatRoutes.post('/session/:sessionId/notes', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  const session = sessions.get(sessionId);
+  
+  if (!session) {
+    return c.json({ error: 'Session not found' }, 404);
+  }
+
+  const body = await c.req.json();
+  session.notesContent = body.notes || '';
+
+  return c.json({ success: true });
+});
+
 // Send text message and get response
 editorChatRoutes.post('/session/:sessionId/chat', async (c) => {
   const sessionId = c.req.param('sessionId');
@@ -104,6 +257,37 @@ editorChatRoutes.post('/session/:sessionId/chat', async (c) => {
     return c.json({ error: 'Message required' }, 400);
   }
 
+  // Check for slash command
+  const slashCommand = parseSlashCommand(userMessage);
+  if (slashCommand) {
+    console.log(`Slash command detected: ${slashCommand.command}`, slashCommand.argument || '');
+    
+    try {
+      const result = await executeSlashCommand(c.env, slashCommand, session.notesContent);
+      
+      // Add to history as command execution
+      session.history.push({ role: 'user', content: `[Command: ${slashCommand.command}] ${slashCommand.argument || ''}` });
+      session.history.push({ role: 'assistant', content: result.response });
+      
+      return c.json({
+        response: result.response,
+        isCommand: true,
+        commandType: result.commandType,
+        commandData: result.data,
+        sessionId,
+      });
+    } catch (e) {
+      console.error('Slash command error:', e);
+      return c.json({ 
+        response: `Sorry, I couldn't execute that command: ${e}`,
+        isCommand: true,
+        commandType: slashCommand.command,
+        error: true,
+      });
+    }
+  }
+
+  // Normal chat flow
   // Add user message to history
   session.history.push({ role: 'user', content: userMessage });
 
@@ -162,29 +346,62 @@ editorChatRoutes.post('/session/:sessionId/voice', async (c) => {
     if (!transcript) {
       return c.json({ error: 'Could not transcribe audio' }, 400);
     }
-
-    // Add user message to history
-    session.history.push({ role: 'user', content: transcript });
-
-    // Keep history manageable
-    const recentHistory = session.history.length > 12
-      ? [session.history[0], ...session.history.slice(-10)]
-      : session.history;
-
-    // Generate LLM response
-    // @ts-expect-error - model exists in Workers AI
-    const llmResult = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-      messages: recentHistory,
-      max_tokens: 150,
-      temperature: 0.7,
-    }) as { response?: string };
-
-    const response = llmResult.response?.trim() || "I didn't catch that. Could you try again?";
     
-    // Add assistant response to history
-    session.history.push({ role: 'assistant', content: response });
+    console.log(`Transcript: "${transcript}"`);
 
-    // Generate TTS
+    // Check for slash command in transcript
+    const slashCommand = parseSlashCommand(transcript);
+    
+    let response: string;
+    let responseForTTS: string;
+    let isCommand = false;
+    let commandType: string | undefined;
+    let commandData: unknown;
+    
+    if (slashCommand) {
+      console.log(`Voice slash command detected: ${slashCommand.command}`, slashCommand.argument || '');
+      isCommand = true;
+      commandType = slashCommand.command;
+      
+      try {
+        const result = await executeSlashCommand(c.env, slashCommand, session.notesContent);
+        response = result.response;
+        responseForTTS = result.spokenResponse;
+        commandData = result.data;
+        
+        // Add to history as command execution
+        session.history.push({ role: 'user', content: `[Command: ${slashCommand.command}] ${slashCommand.argument || ''}` });
+        session.history.push({ role: 'assistant', content: response });
+      } catch (e) {
+        console.error('Slash command error:', e);
+        response = `Sorry, I couldn't execute that command.`;
+        responseForTTS = response;
+      }
+    } else {
+      // Normal chat flow
+      session.history.push({ role: 'user', content: transcript });
+
+      // Keep history manageable
+      const recentHistory = session.history.length > 12
+        ? [session.history[0], ...session.history.slice(-10)]
+        : session.history;
+
+      // Generate LLM response
+      // @ts-expect-error - model exists in Workers AI
+      const llmResult = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        messages: recentHistory,
+        max_tokens: 150,
+        temperature: 0.7,
+      }) as { response?: string };
+
+      response = llmResult.response?.trim() || "I didn't catch that. Could you try again?";
+      responseForTTS = response;
+      
+      // Add assistant response to history
+      session.history.push({ role: 'assistant', content: response });
+    }
+
+    // Generate TTS (use spoken response which is shorter for commands)
     let responseAudioBase64: string | null = null;
     try {
       const speaker = getSpeakerName(session.config.voice);
@@ -192,13 +409,13 @@ editorChatRoutes.post('/session/:sessionId/voice', async (c) => {
       
       // Use returnRawResponse to get Response object with audio
       const ttsResponse = await c.env.AI.run('@cf/deepgram/aura-1' as Parameters<typeof c.env.AI.run>[0], {
-        text: response,
+        text: responseForTTS,
         speaker,
         encoding: 'mp3',
       }, { returnRawResponse: true }) as Response;
       
-      const audioBuffer = await ttsResponse.arrayBuffer();
-      const bytes = new Uint8Array(audioBuffer);
+      const ttsAudioBuffer = await ttsResponse.arrayBuffer();
+      const bytes = new Uint8Array(ttsAudioBuffer);
       
       if (bytes.length > 0) {
         let binary = '';
@@ -220,6 +437,9 @@ editorChatRoutes.post('/session/:sessionId/voice', async (c) => {
       response,
       audio: responseAudioBase64,
       audioFormat: 'mp3',
+      isCommand,
+      commandType,
+      commandData,
     });
 
   } catch (e) {
