@@ -47,29 +47,43 @@ export function useRealtimeVoice({
       if (!base64) continue;
       
       if (!audioContextRef.current) {
-        audioContextRef.current = new AudioContext({ sampleRate: 48000 });
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
       
       try {
         const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-        const audioBuffer = await audioContextRef.current.decodeAudioData(bytes.buffer.slice(0));
         
-        const source = audioContextRef.current.createBufferSource();
-        source.buffer = audioBuffer;
+        // For MP3, use Audio element instead of decodeAudioData (more reliable)
+        const blob = new Blob([bytes], { type: 'audio/mp3' });
+        const url = URL.createObjectURL(blob);
+        
+        const audio = new Audio();
+        audio.src = url;
+        audio.crossOrigin = 'anonymous';
+        
+        // Create a media element audio source and connect to destination
+        const source = audioContextRef.current.createMediaElementAudioSource(audio);
         source.connect(audioContextRef.current.destination);
         
-        currentSourceRef.current = source;
-        
-        // Wait for this audio to finish before playing next
+        // Wait for audio to finish playing
         await new Promise<void>((resolve) => {
-          source.onended = () => {
-            currentSourceRef.current = null;
+          audio.onended = () => {
+            URL.revokeObjectURL(url);
             resolve();
           };
-          source.start();
+          audio.onerror = (e) => {
+            console.error('Audio playback error:', e);
+            URL.revokeObjectURL(url);
+            resolve();
+          };
+          audio.play().catch(e => {
+            console.error('Audio play error:', e);
+            URL.revokeObjectURL(url);
+            resolve();
+          });
         });
       } catch (e) {
-        console.error('Audio playback error:', e);
+        console.error('Audio queue processing error:', e);
       }
     }
     
