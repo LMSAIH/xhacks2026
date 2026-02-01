@@ -22,7 +22,10 @@ export function SelectTopicPage() {
         <div className="w-full max-w-2xl mx-auto animate-fade-in-up">
           {/* Header */}
           <div className="mb-10 text-center">
-            <h1 className="text-3xl md:text-4xl font-semibold mb-4">
+            <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">
+              Get Started
+            </p>
+            <h1 className="text-3xl md:text-4xl font-display font-semibold mb-4">
               What would you like to learn?
             </h1>
             <p className="text-muted-foreground text-lg">
@@ -35,12 +38,18 @@ export function SelectTopicPage() {
             {/* SFU Course Option */}
             <button
               onClick={() => setSelected("sfu")}
-              className={`w-full text-left p-6 border-2 transition-all ${
+              className={`relative w-full text-left p-6 border-2 transition-all ${
                 selected === "sfu"
                   ? "border-foreground bg-foreground text-background"
                   : "border-border hover:border-foreground bg-card"
               }`}
             >
+              {/* Corner brackets */}
+              <span className={`absolute top-2 left-2 text-xs font-mono ${selected === "sfu" ? "text-background/50" : "text-muted-foreground/50"}`}>┌</span>
+              <span className={`absolute top-2 right-2 text-xs font-mono ${selected === "sfu" ? "text-background/50" : "text-muted-foreground/50"}`}>┐</span>
+              <span className={`absolute bottom-2 left-2 text-xs font-mono ${selected === "sfu" ? "text-background/50" : "text-muted-foreground/50"}`}>└</span>
+              <span className={`absolute bottom-2 right-2 text-xs font-mono ${selected === "sfu" ? "text-background/50" : "text-muted-foreground/50"}`}>┘</span>
+              
               <div className="flex items-start gap-5">
                 <div
                   className={`w-14 h-14 flex items-center justify-center text-2xl shrink-0 ${
@@ -50,11 +59,11 @@ export function SelectTopicPage() {
                   📚
                 </div>
                 <div className="flex-1">
-                  <div className="text-xl font-semibold mb-1">
+                  <div className="text-xl font-display font-semibold mb-1">
                     Browse SFU Courses
                   </div>
                   <p
-                    className={`${
+                    className={`font-mono text-sm ${
                       selected === "sfu"
                         ? "text-background/70"
                         : "text-muted-foreground"
@@ -73,12 +82,18 @@ export function SelectTopicPage() {
             {/* Custom Topic Option */}
             <button
               onClick={() => setSelected("custom")}
-              className={`w-full text-left p-6 border-2 transition-all ${
+              className={`relative w-full text-left p-6 border-2 transition-all ${
                 selected === "custom"
                   ? "border-foreground bg-foreground text-background"
                   : "border-border hover:border-foreground bg-card"
               }`}
             >
+              {/* Corner brackets */}
+              <span className={`absolute top-2 left-2 text-xs font-mono ${selected === "custom" ? "text-background/50" : "text-muted-foreground/50"}`}>┌</span>
+              <span className={`absolute top-2 right-2 text-xs font-mono ${selected === "custom" ? "text-background/50" : "text-muted-foreground/50"}`}>┐</span>
+              <span className={`absolute bottom-2 left-2 text-xs font-mono ${selected === "custom" ? "text-background/50" : "text-muted-foreground/50"}`}>└</span>
+              <span className={`absolute bottom-2 right-2 text-xs font-mono ${selected === "custom" ? "text-background/50" : "text-muted-foreground/50"}`}>┘</span>
+              
               <div className="flex items-start gap-5">
                 <div
                   className={`w-14 h-14 flex items-center justify-center text-2xl shrink-0 ${
@@ -88,11 +103,11 @@ export function SelectTopicPage() {
                   ✨
                 </div>
                 <div className="flex-1">
-                  <div className="text-xl font-semibold mb-1">
+                  <div className="text-xl font-display font-semibold mb-1">
                     Learn Something New
                   </div>
                   <p
-                    className={`${
+                    className={`font-mono text-sm ${
                       selected === "custom"
                         ? "text-background/70"
                         : "text-muted-foreground"
@@ -113,9 +128,10 @@ export function SelectTopicPage() {
           <button
             disabled={!selected}
             onClick={handleContinue}
-            className="w-full py-4 bg-foreground text-background font-medium text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-colors"
+            className="group w-full py-4 bg-foreground text-background font-display font-medium text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-colors flex items-center justify-center gap-2"
           >
-            Continue →
+            Continue
+            <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
           </button>
         </div>
       </div>

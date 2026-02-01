@@ -17,20 +17,25 @@ export function StepContainer({
   topic,
 }: StepContainerProps) {
   return (
-    <div className="flex-1 flex items-start justify-center px-4 py-6 md:py-10">
+    <div className="flex-1 flex items-start justify-center px-6 py-10 md:py-16">
       <BlurFade delay={0.1} duration={0.5} blur="10px">
         <div className="w-full max-w-4xl">
           {/* Main Box Container */}
-          <div className="border border-border bg-card shadow-sm">
+          <div className="border-2 border-foreground bg-card relative">
+            {/* Terminal-style corner brackets */}
+            <div className="absolute top-2 left-2 text-border font-mono text-xs">┌</div>
+            <div className="absolute top-2 right-2 text-border font-mono text-xs">┐</div>
+            <div className="absolute bottom-2 left-2 text-border font-mono text-xs">└</div>
+            <div className="absolute bottom-2 right-2 text-border font-mono text-xs">┘</div>
+
             {/* Box Header with Topic */}
             <div className="px-6 py-4 border-b border-border bg-muted/30">
               <div className="flex items-center gap-3">
-
                 <div className="min-w-0">
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider">
+                  <div className="text-xs text-muted-foreground uppercase tracking-widest font-mono">
                     Learning Session
                   </div>
-                  <div className="font-semibold truncate">{topic}</div>
+                  <div className="font-display font-semibold truncate">{topic}</div>
                 </div>
               </div>
             </div>
@@ -48,7 +53,7 @@ export function StepContainer({
                       <button
                         onClick={() => isClickable && onStepClick(index)}
                         disabled={!isClickable}
-                        className={`flex items-center gap-2 w-full py-2 px-3 transition-all ${
+                        className={`flex items-center gap-2 w-full py-2 px-3 transition-all duration-300 ${
                           isActive
                             ? "bg-foreground text-background"
                             : isCompleted
@@ -57,12 +62,12 @@ export function StepContainer({
                         } ${isClickable ? "cursor-pointer" : "cursor-not-allowed"}`}
                       >
                         <span
-                          className={`w-5 h-5 flex items-center justify-center text-xs font-bold shrink-0 ${
+                          className={`w-6 h-6 flex items-center justify-center text-xs font-bold font-mono shrink-0 border-2 ${
                             isActive
-                              ? "bg-background text-foreground"
+                              ? "border-background text-background"
                               : isCompleted
-                              ? "bg-foreground text-background"
-                              : "bg-muted-foreground/20 text-muted-foreground"
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-muted-foreground/30 text-muted-foreground"
                           }`}
                         >
                           {isCompleted && !isActive ? "✓" : index + 1}
@@ -73,7 +78,7 @@ export function StepContainer({
                       </button>
                       {index < steps.length - 1 && (
                         <div
-                          className={`w-4 h-px shrink-0 ${
+                          className={`w-6 h-0.5 shrink-0 ${
                             isCompleted ? "bg-foreground" : "bg-border"
                           }`}
                         />
