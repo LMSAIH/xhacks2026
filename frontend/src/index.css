@@ -399,7 +399,7 @@
   background-size: 16px 16px;
 }
 
-/* Scanline effect (subtle) */
+/* Scanline effect (subtle) - enhanced for black box */
 .scanlines::after {
   content: '';
   position: absolute;
@@ -408,10 +408,21 @@
     0deg,
     transparent,
     transparent 2px,
-    hsl(var(--foreground) / 0.02) 2px,
-    hsl(var(--foreground) / 0.02) 4px
+    rgba(255, 255, 255, 0.03) 2px,
+    rgba(255, 255, 255, 0.03) 4px
   );
   pointer-events: none;
+  animation: scanline-flicker 8s infinite;
+}
+
+@keyframes scanline-flicker {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.7; }
+}
+
+/* Radial gradient utility */
+.bg-gradient-radial {
+  background: radial-gradient(circle, var(--tw-gradient-stops));
 }
 
 :root {
