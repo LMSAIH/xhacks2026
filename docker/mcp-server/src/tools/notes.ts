@@ -199,7 +199,10 @@ Use clear, accessible language. If relevant course material is provided, referen
 
 export const GenerateDiagramSchema = {
   name: 'generate_diagram',
-  description: 'Generate an educational diagram or illustration using DALL-E 3',
+  description: `Generate an educational diagram or illustration. 
+For CLI/agent use (source: 'cli'): Returns a detailed text description of the diagram that can be used to understand the concept.
+For WebApp use (source: 'webapp'): Generates an actual image using DALL-E 3 and returns base64 data.
+Default is 'cli' mode for agent integrations.`,
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -217,6 +220,12 @@ export const GenerateDiagramSchema = {
         type: 'string' as const,
         description: 'Optional course code for context',
       },
+      source: {
+        type: 'string' as const,
+        enum: ['cli', 'webapp'],
+        description: "Source of the request: 'cli' for agents/IDE (returns description), 'webapp' for web app (returns image)",
+        default: 'cli',
+      },
     },
     required: ['description'],
   },
@@ -226,10 +235,11 @@ export interface GenerateDiagramParams {
   description: string;
   style?: 'diagram' | 'illustration' | 'flowchart' | 'infographic' | 'sketch';
   courseCode?: string;
+  source?: 'cli' | 'webapp';
 }
 
 export async function generateDiagram(params: GenerateDiagramParams) {
-  const { description, style = 'diagram', courseCode } = params;
+  const { description, style = 'diagram', courseCode, source = 'cli' } = params;
 
   const stylePrompts = {
     diagram: 'Clean, professional educational diagram with labeled components. White background, clear lines, minimal colors.',
@@ -239,6 +249,54 @@ export async function generateDiagram(params: GenerateDiagramParams) {
     sketch: 'Hand-drawn sketch style, like a whiteboard drawing. Simple and clear.',
   };
 
+  // For CLI/agent mode: Return a detailed text description instead of generating an image
+  if (source === 'cli') {
+    const systemPrompt = `You are an expert at describing educational diagrams and visual representations.
+Create a detailed, structured description of a ${style} that explains: ${description}
+${courseCode ? `Context: This is for ${courseCode} course.` : ''}
+
+Your description should include:
+1. **Overview**: What the diagram shows at a high level
+2. **Components**: List each visual element with labels
+3. **Relationships**: How components connect or relate
+4. **Visual Layout**: Describe the spatial arrangement
+5. **Key Takeaways**: What students should understand from this visualization
+
+Format this so someone could either:
+- Understand the concept without seeing the actual image
+- Create the diagram themselves based on your description
+- Use an image generation tool with this as a detailed prompt`;
+
+    try {
+      const response = await generateTutorResponse(
+        [{ role: 'user', content: `Describe a ${style} for: ${description}` }],
+        systemPrompt,
+        '',
+        { maxTokens: 1000 }
+      );
+
+      return {
+        success: true,
+        mode: 'description',
+        source: 'cli',
+        diagramDescription: response.content,
+        description,
+        style,
+        courseCode: courseCode || null,
+        usage: response.usage,
+        note: 'Image generation is only available in webapp mode. This description can be used to understand the concept or create the diagram manually.',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        mode: 'description',
+        source: 'cli',
+        error: error instanceof Error ? error.message : 'Failed to generate diagram description',
+      };
+    }
+  }
+
+  // For WebApp mode: Generate actual image using DALL-E 3
   const prompt = `${stylePrompts[style]} ${courseCode ? `For ${courseCode} course. ` : ''}${description}. Educational, clear, suitable for students.`;
 
   try {
@@ -257,12 +315,16 @@ export async function generateDiagram(params: GenerateDiagramParams) {
     if (!imageData) {
       return {
         success: false,
+        mode: 'image',
+        source: 'webapp',
         error: 'No image generated',
       };
     }
 
     return {
       success: true,
+      mode: 'image',
+      source: 'webapp',
       image: `data:image/png;base64,${imageData}`,
       description,
       style,
@@ -271,6 +333,8 @@ export async function generateDiagram(params: GenerateDiagramParams) {
   } catch (error) {
     return {
       success: false,
+      mode: 'image',
+      source: 'webapp',
       error: error instanceof Error ? error.message : 'Failed to generate diagram',
     };
   }

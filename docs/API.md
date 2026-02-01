@@ -63,7 +63,7 @@ Get application configuration including available voices.
 
 ### GET /api/courses
 
-Search courses with optional filters.
+List all courses with optional name filter.
 
 **Query Parameters**
 | Parameter | Type | Description |
@@ -91,6 +91,190 @@ Search courses with optional filters.
       "created_at": "2026-02-01 14:37:08"
     }
   ]
+}
+```
+
+### GET /api/courses/search
+
+Advanced course search with rich filtering. Supports text search, course code normalization, prerequisite lookup, instructor search, and level filtering.
+
+**Query Parameters**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `q` or `query` | string | General text search (searches title and description) |
+| `code` or `courseCode` | string | Course code lookup with auto-normalization. "CMPT225", "cmpt-225", "CMPT 225" all work |
+| `dept` or `department` | string | Filter by department code (e.g., "CMPT", "MATH", "PHYS") |
+| `level` | string | Filter by course level: "100", "200", "300", "400", "500" (500 includes all graduate) |
+| `instructor` | string | Search by instructor name |
+| `prereq` or `prerequisites` | string | Find courses that require this course as a prerequisite |
+| `coreq` or `corequisites` | string | Find courses with this corequisite |
+| `hasPrereqs` | boolean | Filter: "true" = has prerequisites, "false" = no prerequisites |
+| `limit` | number | Maximum results to return (default: 20, max: 100) |
+
+**Examples**
+```
+# Find all 300-level CMPT courses
+GET /api/courses/search?dept=CMPT&level=300
+
+# Find courses requiring CMPT 225 as a prerequisite
+GET /api/courses/search?prereq=CMPT225
+
+# Search by instructor
+GET /api/courses/search?instructor=John%20Edgar
+
+# Text search with department filter
+GET /api/courses/search?q=machine+learning&dept=CMPT
+
+# Course code lookup (all these return CMPT 225)
+GET /api/courses/search?code=CMPT225
+GET /api/courses/search?code=cmpt-225
+GET /api/courses/search?code=CMPT%20225
+```
+
+**Response**
+```json
+{
+  "courses": [
+    {
+      "name": "CMPT 225",
+      "title": "Data Structures and Programming",
+      "description": "Introduction to a variety of practical and important data structures...",
+      "units": "3",
+      "prerequisites": "CMPT 125 or CMPT 129 or CMPT 135.",
+      "corequisites": "MACM 201.",
+      "instructors": "John Edgar, Victor Cheung",
+      "degree_level": "UGRD",
+      "delivery_method": "In Person",
+      "term": "Spring 2025",
+      "relevance": 1.0
+    }
+  ],
+  "total": 1,
+  "query": {
+    "courseCode": "CMPT225"
+  }
+}
+```
+
+### POST /api/courses/search
+
+Advanced search with JSON body (for complex queries from MCP).
+
+**Request Body**
+```json
+{
+  "query": "machine learning",
+  "department": "CMPT",
+  "level": "400",
+  "instructor": "Martin Ester",
+  "limit": 10
+}
+```
+
+**Response**: Same as GET /api/courses/search
+
+### GET /api/courses/requiring/:courseCode
+
+Find courses that require a specific course as a prerequisite.
+
+**Path Parameters**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `courseCode` | string | The prerequisite course code (auto-normalized) |
+
+**Query Parameters**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | number | 20 | Maximum results |
+
+**Example**
+```
+GET /api/courses/requiring/CMPT225
+GET /api/courses/requiring/CMPT%20225
+```
+
+**Response**
+```json
+{
+  "prerequisite": "CMPT 225",
+  "courses": [
+    {
+      "name": "CMPT 295",
+      "title": "Introduction to Computer Systems",
+      "prerequisites": "CMPT 225 with a minimum grade of C-.",
+      "instructors": "Brian Fraser"
+    },
+    {
+      "name": "CMPT 307",
+      "title": "Data Structures and Algorithms",
+      "prerequisites": "CMPT 225; MACM 201.",
+      "instructors": "Binay Bhattacharya"
+    }
+  ],
+  "total": 15
+}
+```
+
+### GET /api/courses/instructor/:name
+
+Find courses taught by a specific instructor.
+
+**Path Parameters**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | string | Instructor name (partial match supported) |
+
+**Query Parameters**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | number | 20 | Maximum results |
+
+**Example**
+```
+GET /api/courses/instructor/John%20Edgar
+```
+
+**Response**
+```json
+{
+  "instructor": "John Edgar",
+  "courses": [
+    {
+      "name": "CMPT 120",
+      "title": "Introduction to Computing Science and Programming I",
+      "instructors": "Diana Cukierman, John Edgar"
+    },
+    {
+      "name": "CMPT 225",
+      "title": "Data Structures and Programming",
+      "instructors": "John Edgar, Victor Cheung"
+    }
+  ],
+  "total": 2
+}
+```
+
+### GET /api/courses/normalize/:code
+
+Utility endpoint to normalize course codes.
+
+**Path Parameters**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `code` | string | Course code in any format |
+
+**Example**
+```
+GET /api/courses/normalize/CMPT225
+GET /api/courses/normalize/cmpt-225
+GET /api/courses/normalize/CMPT_225
+```
+
+**Response**
+```json
+{
+  "input": "CMPT225",
+  "normalized": "CMPT 225"
 }
 ```
 

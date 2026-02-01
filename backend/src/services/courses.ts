@@ -269,3 +269,271 @@ export async function getCourse(env: Env, options: { id?: string; name?: string 
 
   return null;
 }
+
+// ============================================================================
+// ADVANCED SEARCH - For MCP and rich querying
+// ============================================================================
+
+/**
+ * Normalize course code to canonical format: "CMPT 225"
+ * Handles: "CMPT225", "cmpt-225", "CMPT_225", "cmpt 225", etc.
+ */
+export function normalizeCourseCode(input: string): string {
+  const cleaned = input.toUpperCase().replace(/[-_]/g, ' ').trim();
+  // Match pattern: DEPT + optional space + NUMBER (with optional letter suffix)
+  const match = cleaned.match(/^([A-Z]+)\s*(\d+\w*)$/);
+  if (match) {
+    return `${match[1]} ${match[2]}`;
+  }
+  return cleaned;
+}
+
+/**
+ * Extract department and number from a course code
+ */
+export function parseCourseCode(code: string): { dept: string; number: string; level: string } | null {
+  const normalized = normalizeCourseCode(code);
+  const match = normalized.match(/^([A-Z]+)\s+(\d+\w*)$/);
+  if (match) {
+    const num = match[2];
+    // Level is the first digit * 100 (e.g., "225" -> "200", "120" -> "100")
+    const level = num.length > 0 ? `${num[0]}00` : '';
+    return { dept: match[1], number: match[2], level };
+  }
+  return null;
+}
+
+export interface AdvancedSearchOptions {
+  query?: string;           // General text search (title, description)
+  courseCode?: string;      // Exact or partial course code
+  department?: string;      // Filter by department (CMPT, MATH, etc.)
+  level?: string;           // Filter by level: "100", "200", "300", "400", "500+"
+  instructor?: string;      // Search by instructor name
+  prerequisites?: string;   // Search courses that require this prereq
+  corequisites?: string;    // Search courses with this corequisite
+  hasPrerequisites?: boolean; // Filter: true = has prereqs, false = no prereqs
+  limit?: number;           // Max results (default 20)
+}
+
+export interface SearchResultCourse {
+  name: string;
+  title: string;
+  description: string;
+  units: string;
+  prerequisites: string;
+  corequisites: string;
+  instructors: string;
+  degree_level: string;
+  delivery_method: string;
+  term: string;
+  relevance: number;        // 0-1 relevance score
+}
+
+/**
+ * Advanced course search with multiple filter options
+ * Optimized for low latency with indexed queries
+ */
+export async function advancedSearchCourses(
+  env: Env,
+  options: AdvancedSearchOptions
+): Promise<{ courses: SearchResultCourse[]; total: number; query: AdvancedSearchOptions }> {
+  const limit = Math.min(options.limit || 20, 100);
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  
+  // 1. Course code search (with normalization)
+  if (options.courseCode) {
+    const normalized = normalizeCourseCode(options.courseCode);
+    const parsed = parseCourseCode(options.courseCode);
+    
+    if (parsed) {
+      // Exact match or prefix match
+      conditions.push('(name = ? OR name LIKE ?)');
+      params.push(normalized, `${parsed.dept} ${parsed.number}%`);
+    } else {
+      // Fuzzy match on the normalized input
+      conditions.push('name LIKE ?');
+      params.push(`%${normalized}%`);
+    }
+  }
+  
+  // 2. Department filter
+  if (options.department) {
+    const dept = options.department.toUpperCase();
+    conditions.push('name LIKE ?');
+    params.push(`${dept} %`);
+  }
+  
+  // 3. Level filter (100, 200, 300, 400, 500+)
+  if (options.level) {
+    const levelNum = parseInt(options.level, 10);
+    if (levelNum >= 500) {
+      // Graduate level: 500+
+      conditions.push("CAST(SUBSTR(name, INSTR(name, ' ') + 1, 1) AS INTEGER) >= 5");
+    } else if (levelNum >= 100 && levelNum <= 400) {
+      // Undergrad levels: match first digit
+      const levelDigit = Math.floor(levelNum / 100);
+      conditions.push("SUBSTR(name, INSTR(name, ' ') + 1, 1) = ?");
+      params.push(levelDigit.toString());
+    }
+  }
+  
+  // 4. Instructor search
+  if (options.instructor) {
+    conditions.push('LOWER(instructors) LIKE ?');
+    params.push(`%${options.instructor.toLowerCase()}%`);
+  }
+  
+  // 5. Prerequisites search (courses that require this as a prereq)
+  if (options.prerequisites) {
+    const prereq = normalizeCourseCode(options.prerequisites);
+    conditions.push('LOWER(prerequisites) LIKE ?');
+    params.push(`%${prereq.toLowerCase()}%`);
+  }
+  
+  // 6. Corequisites search
+  if (options.corequisites) {
+    const coreq = normalizeCourseCode(options.corequisites);
+    conditions.push('LOWER(corequisites) LIKE ?');
+    params.push(`%${coreq.toLowerCase()}%`);
+  }
+  
+  // 7. Has prerequisites filter
+  if (options.hasPrerequisites !== undefined) {
+    if (options.hasPrerequisites) {
+      conditions.push("prerequisites IS NOT NULL AND prerequisites != ''");
+    } else {
+      conditions.push("(prerequisites IS NULL OR prerequisites = '')");
+    }
+  }
+  
+  // 8. General text search (title, description)
+  if (options.query) {
+    const searchTerm = `%${options.query.toLowerCase()}%`;
+    conditions.push('(LOWER(title) LIKE ? OR LOWER(description) LIKE ?)');
+    params.push(searchTerm, searchTerm);
+  }
+  
+  // Build the query
+  let sql = 'SELECT * FROM sfu_courses';
+  if (conditions.length > 0) {
+    sql += ' WHERE ' + conditions.join(' AND ');
+  }
+  sql += ' ORDER BY name ASC';
+  sql += ` LIMIT ${limit}`;
+  
+  // Execute query
+  const result = await env.DB.prepare(sql).bind(...params).all();
+  const courses = (result.results || []) as any[];
+  
+  // Calculate relevance scores
+  const scoredCourses: SearchResultCourse[] = courses.map(course => {
+    let relevance = 0.5; // Base relevance
+    
+    // Boost for exact course code match
+    if (options.courseCode) {
+      const normalized = normalizeCourseCode(options.courseCode);
+      if (course.name === normalized) {
+        relevance = 1.0;
+      } else if (course.name.startsWith(normalized.split(' ')[0])) {
+        relevance = 0.8;
+      }
+    }
+    
+    // Boost for instructor match
+    if (options.instructor && course.instructors?.toLowerCase().includes(options.instructor.toLowerCase())) {
+      relevance = Math.min(1.0, relevance + 0.2);
+    }
+    
+    // Boost for query match in title
+    if (options.query && course.title?.toLowerCase().includes(options.query.toLowerCase())) {
+      relevance = Math.min(1.0, relevance + 0.3);
+    }
+    
+    return {
+      name: course.name,
+      title: course.title || '',
+      description: course.description || '',
+      units: course.units || '',
+      prerequisites: course.prerequisites || '',
+      corequisites: course.corequisites || '',
+      instructors: course.instructors || '',
+      degree_level: course.degree_level || '',
+      delivery_method: course.delivery_method || '',
+      term: course.term || '',
+      relevance,
+    };
+  });
+  
+  // Sort by relevance
+  scoredCourses.sort((a, b) => b.relevance - a.relevance);
+  
+  return {
+    courses: scoredCourses,
+    total: scoredCourses.length,
+    query: options,
+  };
+}
+
+/**
+ * Get courses that have a specific course as a prerequisite
+ * "What courses require CMPT 225?"
+ */
+export async function getCoursesRequiring(
+  env: Env,
+  courseCode: string,
+  limit = 20
+): Promise<SearchResultCourse[]> {
+  const normalized = normalizeCourseCode(courseCode);
+  
+  const result = await env.DB.prepare(`
+    SELECT * FROM sfu_courses
+    WHERE LOWER(prerequisites) LIKE ?
+    ORDER BY name ASC
+    LIMIT ?
+  `).bind(`%${normalized.toLowerCase()}%`, limit).all();
+  
+  return (result.results || []).map((course: any) => ({
+    name: course.name,
+    title: course.title || '',
+    description: course.description || '',
+    units: course.units || '',
+    prerequisites: course.prerequisites || '',
+    corequisites: course.corequisites || '',
+    instructors: course.instructors || '',
+    degree_level: course.degree_level || '',
+    delivery_method: course.delivery_method || '',
+    term: course.term || '',
+    relevance: 1.0,
+  }));
+}
+
+/**
+ * Get all courses taught by an instructor
+ */
+export async function getCoursesByInstructor(
+  env: Env,
+  instructorName: string,
+  limit = 20
+): Promise<SearchResultCourse[]> {
+  const result = await env.DB.prepare(`
+    SELECT * FROM sfu_courses
+    WHERE LOWER(instructors) LIKE ?
+    ORDER BY name ASC
+    LIMIT ?
+  `).bind(`%${instructorName.toLowerCase()}%`, limit).all();
+  
+  return (result.results || []).map((course: any) => ({
+    name: course.name,
+    title: course.title || '',
+    description: course.description || '',
+    units: course.units || '',
+    prerequisites: course.prerequisites || '',
+    corequisites: course.corequisites || '',
+    instructors: course.instructors || '',
+    degree_level: course.degree_level || '',
+    delivery_method: course.delivery_method || '',
+    term: course.term || '',
+    relevance: 1.0,
+  }));
+}

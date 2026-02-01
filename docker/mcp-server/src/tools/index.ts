@@ -3,7 +3,10 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { listPersonas, ListPersonasSchema } from './personas.js';
 import { listVoices, getVoiceForCourse, ListVoicesSchema, GetVoiceForCourseSchema } from './voices.js';
-import { searchCourses, getCourseOutlineTool, SearchCoursesSchema, GetCourseOutlineSchema } from './courses.js';
+import {
+  searchCourses, getCourseOutlineTool, findPrerequisites,
+  SearchCoursesSchema, GetCourseOutlineSchema, FindPrerequisitesSchema
+} from './courses.js';
 import { getInstructorInfo, GetInstructorInfoSchema } from './instructors.js';
 import { startSession, askQuestion, endSession, getSessionInfo, StartSessionSchema, AskQuestionSchema, EndSessionSchema, GetSessionInfoSchema } from './tutoring.js';
 import {
@@ -14,32 +17,45 @@ import {
   chatMessage, ChatMessageSchema,
   suggestImprovements, SuggestImprovementsSchema,
 } from './notes.js';
+import {
+  critiqueDocument, CritiqueDocumentSchema,
+  suggestDocument, SuggestDocumentSchema,
+  askDocument, AskDocumentSchema,
+  summarizeDocument, SummarizeDocumentSchema,
+} from './documents.js';
 
 // All available MCP tools
 const TOOLS = [
-  // Session-based tutoring
+  // ========== Session-based tutoring ==========
   StartSessionSchema,
   AskQuestionSchema,
   EndSessionSchema,
   GetSessionInfoSchema,
   
-  // Course discovery
+  // ========== Course discovery (enhanced) ==========
   SearchCoursesSchema,
   GetCourseOutlineSchema,
+  FindPrerequisitesSchema,  // NEW: Find courses requiring a prereq
   GetInstructorInfoSchema,
   
-  // Voice & personas
+  // ========== Voice & personas ==========
   ListVoicesSchema,
   GetVoiceForCourseSchema,
   ListPersonasSchema,
   
-  // Notes & learning tools (NEW)
+  // ========== Notes & learning tools ==========
   CritiqueNotesSchema,
   ExplainConceptSchema,
-  GenerateDiagramSchema,
+  GenerateDiagramSchema,  // UPDATED: Now has source param for CLI vs WebApp
   GetFormulasSchema,
   ChatMessageSchema,
   SuggestImprovementsSchema,
+  
+  // ========== Document tools (NEW - for IDE/agent integrations) ==========
+  CritiqueDocumentSchema,
+  SuggestDocumentSchema,
+  AskDocumentSchema,
+  SummarizeDocumentSchema,
 ];
 
 export function registerTools(server: Server): void {
@@ -74,12 +90,15 @@ export function registerTools(server: Server): void {
           result = await getSessionInfo(args as unknown as Parameters<typeof getSessionInfo>[0]);
           break;
           
-        // ========== Course discovery ==========
+        // ========== Course discovery (enhanced) ==========
         case 'search_courses':
           result = await searchCourses(args as unknown as Parameters<typeof searchCourses>[0]);
           break;
         case 'get_course_outline':
           result = await getCourseOutlineTool(args as unknown as Parameters<typeof getCourseOutlineTool>[0]);
+          break;
+        case 'find_prerequisites':
+          result = await findPrerequisites(args as unknown as Parameters<typeof findPrerequisites>[0]);
           break;
         case 'get_instructor_info':
           result = await getInstructorInfo(args as unknown as Parameters<typeof getInstructorInfo>[0]);
@@ -97,7 +116,7 @@ export function registerTools(server: Server): void {
           result = { personas: listPersonas() };
           break;
           
-        // ========== Notes & learning tools (NEW) ==========
+        // ========== Notes & learning tools ==========
         case 'critique_notes':
           result = await critiqueNotes(args as unknown as Parameters<typeof critiqueNotes>[0]);
           break;
@@ -115,6 +134,20 @@ export function registerTools(server: Server): void {
           break;
         case 'suggest_improvements':
           result = await suggestImprovements(args as unknown as Parameters<typeof suggestImprovements>[0]);
+          break;
+          
+        // ========== Document tools (NEW) ==========
+        case 'critique_document':
+          result = await critiqueDocument(args as unknown as Parameters<typeof critiqueDocument>[0]);
+          break;
+        case 'suggest_document':
+          result = await suggestDocument(args as unknown as Parameters<typeof suggestDocument>[0]);
+          break;
+        case 'ask_document':
+          result = await askDocument(args as unknown as Parameters<typeof askDocument>[0]);
+          break;
+        case 'summarize_document':
+          result = await summarizeDocument(args as unknown as Parameters<typeof summarizeDocument>[0]);
           break;
           
         default:

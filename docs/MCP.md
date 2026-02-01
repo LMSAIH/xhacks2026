@@ -150,26 +150,125 @@ End the current tutoring session.
 
 Get information about the current session.
 
-### Course Discovery
+### Course Discovery (Enhanced)
 
 #### search_courses
 
-Search for courses by code or keyword.
+Search for SFU courses with rich filtering. Supports text search, course code normalization, prerequisite lookup, instructor search, and level filtering.
 
 **Parameters**
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `query` | string | Yes | Search query |
-| `limit` | number | No | Maximum results (default: 10) |
+| `query` | string | No | General text search (title, description) |
+| `courseCode` | string | No | Course code lookup with auto-normalization. "CMPT225", "cmpt-225", "CMPT 225" all work |
+| `department` | string | No | Filter by department code (e.g., "CMPT", "MATH") |
+| `level` | string | No | Filter by level: "100", "200", "300", "400", "500" (graduate) |
+| `instructor` | string | No | Search by instructor name |
+| `prerequisites` | string | No | Find courses that require this course as a prerequisite |
+| `limit` | number | No | Maximum results (default: 10, max: 50) |
+
+**Examples**
+```json
+// Find 300-level CMPT courses
+{ "department": "CMPT", "level": "300" }
+
+// Find courses requiring CMPT 225
+{ "prerequisites": "CMPT225" }
+
+// Search by instructor
+{ "instructor": "John Edgar" }
+
+// Text search with department filter
+{ "query": "machine learning", "department": "CMPT" }
+```
+
+**Response**
+```json
+{
+  "courses": [
+    {
+      "code": "CMPT 225",
+      "title": "Data Structures and Programming",
+      "description": "Introduction to data structures...",
+      "units": "3",
+      "prerequisites": "CMPT 125 or CMPT 129 or CMPT 135.",
+      "corequisites": "MACM 201.",
+      "instructors": "John Edgar, Victor Cheung",
+      "level": "UGRD",
+      "relevance": 1.0
+    }
+  ],
+  "total": 1,
+  "source": "backend_api",
+  "searchType": "advanced"
+}
+```
 
 #### get_course_outline
 
-Get the outline for a specific course.
+Get detailed course information including outline, prerequisites, and instructor. Course code is normalized automatically.
 
 **Parameters**
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `courseCode` | string | Yes | Course code |
+| `courseCode` | string | Yes | Course code (e.g., "CMPT 225", "CMPT225", "cmpt-225" all work) |
+
+**Response**
+```json
+{
+  "found": true,
+  "code": "CMPT 225",
+  "title": "Data Structures and Programming",
+  "description": "Introduction to data structures...",
+  "units": "3",
+  "prerequisites": "CMPT 125 or CMPT 129 or CMPT 135.",
+  "corequisites": "MACM 201.",
+  "instructors": "John Edgar, Victor Cheung",
+  "level": "UGRD",
+  "deliveryMethod": "In Person",
+  "term": "Spring 2025",
+  "outline": "Course content from knowledge base...",
+  "source": "backend_api"
+}
+```
+
+#### find_prerequisites
+
+Find all courses that require a specific course as a prerequisite. E.g., "What courses require CMPT 225?"
+
+**Parameters**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `courseCode` | string | Yes | The prerequisite course code to search for |
+| `limit` | number | No | Maximum results (default: 15) |
+
+**Example**
+```json
+{ "courseCode": "CMPT 225" }
+```
+
+**Response**
+```json
+{
+  "prerequisite": "CMPT 225",
+  "coursesRequiring": [
+    {
+      "code": "CMPT 295",
+      "title": "Introduction to Computer Systems",
+      "prerequisites": "CMPT 225 with a minimum grade of C-.",
+      "instructors": "Brian Fraser"
+    },
+    {
+      "code": "CMPT 307",
+      "title": "Data Structures and Algorithms",
+      "prerequisites": "CMPT 225; MACM 201.",
+      "instructors": "Binay Bhattacharya"
+    }
+  ],
+  "total": 15,
+  "message": "Found 15 courses that require CMPT 225"
+}
+```
 
 #### get_instructor_info
 
@@ -273,26 +372,54 @@ Get a detailed explanation of a concept.
 |------|------|----------|-------------|
 | `concept` | string | Yes | Concept to explain |
 | `context` | string | No | Additional context |
-| `depth` | string | No | Explanation depth (basic, intermediate, advanced) |
+| `depth` | string | No | Explanation depth (brief, standard, detailed) |
 
 #### generate_diagram
 
-Generate a diagram description for a concept.
+Generate an educational diagram. Behavior depends on `source` parameter:
+- **CLI/agent mode** (default): Returns a detailed text description of the diagram
+- **WebApp mode**: Generates an actual image using DALL-E 3
 
 **Parameters**
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `concept` | string | Yes | Concept to visualize |
-| `type` | string | No | Diagram type (flowchart, tree, graph) |
+| `description` | string | Yes | Description of the diagram to generate |
+| `style` | string | No | Visual style: diagram, illustration, flowchart, infographic, sketch |
+| `courseCode` | string | No | Course code for context |
+| `source` | string | No | "cli" (default) for text description, "webapp" for image generation |
+
+**Response (CLI mode)**
+```json
+{
+  "success": true,
+  "mode": "description",
+  "source": "cli",
+  "diagramDescription": "## Overview\nA flowchart showing the recursive call stack...\n\n## Components\n1. Base case box...",
+  "note": "Image generation is only available in webapp mode."
+}
+```
+
+**Response (WebApp mode)**
+```json
+{
+  "success": true,
+  "mode": "image",
+  "source": "webapp",
+  "image": "data:image/png;base64,...",
+  "revisedPrompt": "Educational flowchart showing..."
+}
+```
 
 #### get_formulas
 
-Extract and format formulas from notes.
+Extract and format formulas for a topic.
 
 **Parameters**
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `notes` | string | Yes | Notes containing formulas |
+| `topic` | string | Yes | Topic to get formulas for |
+| `courseCode` | string | No | Course-specific formulas |
+| `format` | string | No | Output format: latex, plain, both |
 
 **Response**
 ```json
@@ -325,6 +452,123 @@ Get suggestions for improving notes.
 |------|------|----------|-------------|
 | `notes` | string | Yes | Notes content |
 | `focus` | string | No | Area to focus on (clarity, completeness, structure) |
+
+### Document Tools (IDE/Agent Integrations)
+
+These tools are designed for use with IDE integrations like GitHub Copilot Chat, VS Code extensions, and other MCP-compatible agents. When users reference files like `@notes.md`, the agent reads the file content and passes it to these tools.
+
+#### critique_document
+
+Critique and review a document (notes, essay, code documentation).
+
+**Parameters**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `content` | string | Yes | The document content (agent reads the file and passes content) |
+| `filename` | string | No | Original filename for context (e.g., "notes.md") |
+| `courseCode` | string | No | Course code for academic context |
+| `focusAreas` | array | No | Areas to focus: clarity, completeness, accuracy, structure, grammar, citations |
+| `documentType` | string | No | Type: notes, essay, code, documentation, report, other |
+
+**Example Usage in Copilot Chat**
+```
+Use LearnLM to critique my notes in @chapter1-notes.md for CMPT 225
+```
+
+**Response**
+```json
+{
+  "success": true,
+  "critique": "## Strengths\n1. Clear organization...\n\n## Areas for Improvement\n...\n\n## Overall Assessment: 7/10",
+  "filename": "chapter1-notes.md",
+  "courseCode": "CMPT 225",
+  "documentType": "notes"
+}
+```
+
+#### suggest_document
+
+Suggest specific improvements for a document. Returns actionable suggestions that can be applied directly.
+
+**Parameters**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `content` | string | Yes | The document content |
+| `filename` | string | No | Original filename |
+| `courseCode` | string | No | Course code for RAG lookup |
+| `improvementType` | string | No | Type: expand, clarify, restructure, add_examples, fix_errors, all |
+| `section` | string | No | Specific section to focus on |
+
+**Example Usage**
+```
+Suggest improvements for @recursion-notes.md focusing on adding examples
+```
+
+**Response**
+```json
+{
+  "success": true,
+  "suggestions": "## Suggested Additions\n...\n\n## Suggested Changes\n...\n\n## Missing Topics\n...",
+  "improvementType": "add_examples",
+  "hasContext": true
+}
+```
+
+#### ask_document
+
+Ask a question about a document. The AI answers based on the document content and optionally course knowledge.
+
+**Parameters**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `content` | string | Yes | The document content |
+| `question` | string | Yes | Question about the document |
+| `filename` | string | No | Original filename |
+| `courseCode` | string | No | Course code for additional context |
+| `answerStyle` | string | No | Style: concise, detailed, socratic |
+
+**Example Usage**
+```
+Based on @lecture-notes.md, explain the difference between stacks and queues
+```
+
+**Response**
+```json
+{
+  "success": true,
+  "answer": "Based on your notes, stacks and queues differ in...",
+  "question": "explain the difference between stacks and queues",
+  "answerStyle": "detailed"
+}
+```
+
+#### summarize_document
+
+Summarize a document into key points. Useful for creating study guides or quick references.
+
+**Parameters**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `content` | string | Yes | The document content |
+| `filename` | string | No | Original filename |
+| `summaryType` | string | No | Format: bullet_points, paragraph, outline, flashcards |
+| `maxLength` | string | No | Length: short (~100 words), medium (~300), long (~500) |
+| `focusTopic` | string | No | Specific topic to focus on |
+
+**Example Usage**
+```
+Summarize @chapter5.md as flashcards
+```
+
+**Response**
+```json
+{
+  "success": true,
+  "summary": "**Q:** What is Big O notation?\n**A:** A mathematical notation that describes...\n\n**Q:** What is the time complexity of binary search?\n**A:** O(log n)...",
+  "summaryType": "flashcards",
+  "maxLength": "medium"
+}
+```
 
 ## Personas
 
@@ -394,16 +638,19 @@ const response = await openai.chat.completions.create({
 ```
 docker/mcp-server/
 ├── src/
-│   ├── index.ts           # Entry point
-│   ├── server.ts          # MCP server setup
+│   ├── index.ts           # Entry point (stdio transport)
+│   ├── http-server.ts     # HTTP transport entry point
 │   ├── tools/
-│   │   ├── index.ts       # Tool registration
-│   │   ├── courses.ts     # Course tools
-│   │   ├── instructors.ts # Instructor tools
-│   │   ├── personas.ts    # Persona tools
-│   │   ├── tutoring.ts    # Tutoring session tools
-│   │   ├── voices.ts      # Voice tools
-│   │   └── notes.ts       # Notes assistance tools
+│   │   ├── index.ts       # Tool registration (20 tools)
+│   │   ├── courses.ts     # Course search with rich filtering
+│   │   ├── documents.ts   # Document tools for IDE integrations
+│   │   ├── instructors.ts # Instructor lookup
+│   │   ├── notes.ts       # Notes assistance tools
+│   │   ├── personas.ts    # Tutor persona definitions
+│   │   ├── tutoring.ts    # Session management
+│   │   └── voices.ts      # Voice selection
+│   ├── llm/
+│   │   └── openai.ts      # GPT-4o and DALL-E client
 │   ├── rag/
 │   │   └── cloudflare.ts  # Cloudflare AI Search
 │   └── db/
