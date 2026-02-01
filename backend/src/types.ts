@@ -12,6 +12,15 @@ export interface Env {
   EDITOR_VOICE_SESSION: DurableObjectNamespace;
   OPENAI_API_KEY?: string;
   SFU_API_BASE_URL?: string;
+  // Rate Limiters
+  AI_GENERATION_LIMITER: RateLimit;
+  VOICE_LIMITER: RateLimit;
+  API_LIMITER: RateLimit;
+}
+
+// Rate Limit binding type
+interface RateLimit {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
 }
 
 // Voice states

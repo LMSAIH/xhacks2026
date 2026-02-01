@@ -4,7 +4,6 @@ import type {
   Session,
   SessionResponse,
   CourseOutline,
-  Instructor,
 } from '../types';
 import { getCourseOutline, storeEditedOutline } from './outline';
 import { generateRagContext } from './rag';
