@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import type { Character, Voice } from "./data";
 import {
   StepTitle,
@@ -10,13 +10,7 @@ import {
   HelpText,
 } from "./Typography";
 import { BlurFade } from "@/components/ui/blur-fade";
-
-interface OutlineItem {
-  id: string;
-  number: string;
-  title: string;
-  children?: OutlineItem[];
-}
+import type { OutlineItem, GeneratedOutline } from "@/lib/api";
 
 interface ReviewStepProps {
   topic: string;
@@ -24,103 +18,10 @@ interface ReviewStepProps {
   customCharacter: string;
   voice: Voice | null;
   onBack: () => void;
-  onStart: () => void;
-}
-
-// Generate a course outline based on the topic
-function generateOutline(topic: string): OutlineItem[] {
-  // Simple outline generator based on common learning patterns
-  const topicLower = topic.toLowerCase();
-  
-  // Default structure that works for most topics
-  const baseOutline: OutlineItem[] = [
-    {
-      id: "1",
-      number: "1",
-      title: "Fundamentals",
-      children: [
-        { id: "1.1", number: "1.1", title: "Introduction & Overview" },
-        { id: "1.2", number: "1.2", title: "Key Concepts" },
-        { id: "1.3", number: "1.3", title: "Core Terminology" },
-      ],
-    },
-    {
-      id: "2",
-      number: "2",
-      title: "Core Principles",
-      children: [
-        { id: "2.1", number: "2.1", title: "Main Components" },
-        { id: "2.2", number: "2.2", title: "How It Works" },
-        { id: "2.3", number: "2.3", title: "Common Patterns" },
-      ],
-    },
-    {
-      id: "3",
-      number: "3",
-      title: "Practical Application",
-      children: [
-        { id: "3.1", number: "3.1", title: "Real-World Examples" },
-        { id: "3.2", number: "3.2", title: "Hands-On Exercise" },
-        { id: "3.3", number: "3.3", title: "Best Practices" },
-      ],
-    },
-    {
-      id: "4",
-      number: "4",
-      title: "Advanced Topics",
-      children: [
-        { id: "4.1", number: "4.1", title: "Deep Dive" },
-        { id: "4.2", number: "4.2", title: "Edge Cases" },
-      ],
-    },
-    {
-      id: "5",
-      number: "5",
-      title: "Summary & Next Steps",
-      children: [
-        { id: "5.1", number: "5.1", title: "Key Takeaways" },
-        { id: "5.2", number: "5.2", title: "Further Learning" },
-      ],
-    },
-  ];
-
-  // Customize based on topic keywords
-  if (topicLower.includes("programming") || topicLower.includes("code") || topicLower.includes("javascript") || topicLower.includes("python")) {
-    baseOutline[0].children = [
-      { id: "1.1", number: "1.1", title: "Syntax Basics" },
-      { id: "1.2", number: "1.2", title: "Variables & Data Types" },
-      { id: "1.3", number: "1.3", title: "Control Flow" },
-    ];
-    baseOutline[2].children = [
-      { id: "3.1", number: "3.1", title: "Code Examples" },
-      { id: "3.2", number: "3.2", title: "Debugging Tips" },
-      { id: "3.3", number: "3.3", title: "Project Structure" },
-    ];
-  } else if (topicLower.includes("math") || topicLower.includes("calculus") || topicLower.includes("algebra")) {
-    baseOutline[0].children = [
-      { id: "1.1", number: "1.1", title: "Prerequisites Review" },
-      { id: "1.2", number: "1.2", title: "Core Definitions" },
-      { id: "1.3", number: "1.3", title: "Notation Guide" },
-    ];
-    baseOutline[2].children = [
-      { id: "3.1", number: "3.1", title: "Worked Problems" },
-      { id: "3.2", number: "3.2", title: "Practice Exercises" },
-      { id: "3.3", number: "3.3", title: "Common Mistakes" },
-    ];
-  } else if (topicLower.includes("history") || topicLower.includes("war") || topicLower.includes("civilization")) {
-    baseOutline[0].children = [
-      { id: "1.1", number: "1.1", title: "Historical Context" },
-      { id: "1.2", number: "1.2", title: "Key Figures" },
-      { id: "1.3", number: "1.3", title: "Timeline Overview" },
-    ];
-    baseOutline[2].children = [
-      { id: "3.1", number: "3.1", title: "Primary Sources" },
-      { id: "3.2", number: "3.2", title: "Case Studies" },
-      { id: "3.3", number: "3.3", title: "Impact Analysis" },
-    ];
-  }
-
-  return baseOutline;
+  onStart: (outline: OutlineItem[]) => void;
+  outline: GeneratedOutline | null;
+  isLoadingOutline: boolean;
+  outlineError: string | null;
 }
 
 export function ReviewStep({
@@ -130,13 +31,22 @@ export function ReviewStep({
   voice,
   onBack,
   onStart,
+  outline: generatedOutline,
+  isLoadingOutline,
+  outlineError,
 }: ReviewStepProps) {
   const tutorName = character?.name || customCharacter || "Custom Tutor";
   const tutorDescription = character?.teachingStyle || "A personalized AI tutor";
 
-  // Generate outline based on topic
-  const initialOutline = useMemo(() => generateOutline(topic), [topic]);
-  const [outline, setOutline] = useState<OutlineItem[]>(initialOutline);
+  // Use outline from props (API) or fallback to empty
+  const [outline, setOutline] = useState<OutlineItem[]>(generatedOutline?.sections || []);
+  
+  // Update outline when API data arrives
+  useEffect(() => {
+    if (generatedOutline?.sections) {
+      setOutline(generatedOutline.sections);
+    }
+  }, [generatedOutline]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
@@ -287,16 +197,38 @@ export function ReviewStep({
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div>
                 <SectionLabel className="mb-0.5">Course Outline</SectionLabel>
-                <HelpText className="text-xs">Auto-generated • Click to edit</HelpText>
+                <HelpText className="text-xs">
+                  {isLoadingOutline ? "Generating..." : "AI-generated • Click to edit"}
+                </HelpText>
               </div>
               <div className="text-xs text-muted-foreground bg-muted px-2 py-1">
-                {outline.length} sections
+                {isLoadingOutline ? "..." : `${outline.length} sections`}
               </div>
             </div>
             <div className="p-4 overflow-y-auto max-h-64 flex-1 scrollbar-thin">
-              <div className="space-y-1">
-                {outline.map(item => renderOutlineItem(item))}
-              </div>
+              {isLoadingOutline ? (
+                <div className="flex items-center justify-center h-32">
+                  <div className="text-center">
+                    <div className="animate-spin w-6 h-6 border-2 border-foreground border-t-transparent rounded-full mx-auto mb-2" />
+                    <HelpText>Generating your personalized outline...</HelpText>
+                  </div>
+                </div>
+              ) : outlineError ? (
+                <div className="flex items-center justify-center h-32">
+                  <div className="text-center text-destructive">
+                    <p className="text-sm">Failed to generate outline</p>
+                    <HelpText className="mt-1">{outlineError}</HelpText>
+                  </div>
+                </div>
+              ) : outline.length === 0 ? (
+                <div className="flex items-center justify-center h-32">
+                  <HelpText>No outline available</HelpText>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {outline.map(item => renderOutlineItem(item))}
+                </div>
+              )}
             </div>
           </div>
         </BlurFade>
@@ -339,10 +271,11 @@ export function ReviewStep({
             ← Back
           </button>
           <button
-            onClick={onStart}
-            className="px-6 py-3 bg-foreground text-background font-semibold hover:bg-foreground/90 transition-colors"
+            onClick={() => onStart(outline)}
+            disabled={isLoadingOutline || outline.length === 0}
+            className="px-6 py-3 bg-foreground text-background font-semibold hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Start Learning →
+            {isLoadingOutline ? "Preparing..." : "Start Learning →"}
           </button>
         </div>
       </BlurFade>

@@ -24,10 +24,18 @@ export function VoiceAgent() {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Get topic from navigation state or default
-  const topicState = location.state as { topic?: string; context?: string; prerequisites?: string } | null;
+  // Get topic and voice from navigation state or default
+  const topicState = location.state as { 
+    topic?: string; 
+    context?: string; 
+    prerequisites?: string;
+    voice?: { id: string; name: string };
+    character?: { id: string; name: string };
+  } | null;
   const topic = topicState?.topic || 'General Learning';
   const topicContext = topicState?.context || '';
+  const selectedVoice = topicState?.voice;
+  const selectedCharacter = topicState?.character;
   
   // Create a simple course code from the topic
   const courseCode = topic.split(':')[0].replace(/\s+/g, '').toUpperCase().slice(0, 10) || 'GENERAL';
@@ -80,6 +88,7 @@ export function VoiceAgent() {
   } = useRealtimeVoice({
     serverUrl: wsUrl,
     courseCode: courseCode,
+    voiceId: selectedVoice?.id,
     onTranscriptUpdate: handleTranscriptUpdate,
     onConnectionChange: handleConnectionChange,
     onError: handleError,

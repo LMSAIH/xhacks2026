@@ -181,6 +181,21 @@ CREATE INDEX IF NOT EXISTS idx_outlines_edited_session ON outlines_edited(sessio
 CREATE INDEX IF NOT EXISTS idx_outlines_edited_course ON outlines_edited(course_code);
 
 -- ============================================
+-- AI-Generated Course Outlines Table
+-- ============================================
+CREATE TABLE IF NOT EXISTS course_outlines (
+  id TEXT PRIMARY KEY,
+  topic TEXT NOT NULL,
+  character_json TEXT,  -- JSON: { id, name, teachingStyle }
+  outline_json TEXT NOT NULL,  -- JSON: { sections, learningObjectives, estimatedDuration, difficulty }
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_outlines_topic ON course_outlines(topic);
+CREATE INDEX IF NOT EXISTS idx_course_outlines_created ON course_outlines(created_at);
+
+-- ============================================
 -- Triggers for updated_at
 -- ============================================
 CREATE TRIGGER IF NOT EXISTS update_users_timestamp 

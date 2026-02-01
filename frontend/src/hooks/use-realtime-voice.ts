@@ -3,6 +3,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 interface UseRealtimeVoiceOptions {
   serverUrl: string;
   courseCode?: string;
+  voiceId?: string;
   onTranscriptUpdate?: (transcript: string, isUser: boolean) => void;
   onConnectionChange?: (connected: boolean) => void;
   onError?: (error: string) => void;
@@ -11,6 +12,7 @@ interface UseRealtimeVoiceOptions {
 export function useRealtimeVoice({
   serverUrl,
   courseCode = 'CMPT120',
+  voiceId,
   onTranscriptUpdate,
   onConnectionChange,
   onError,
@@ -26,50 +28,60 @@ export function useRealtimeVoice({
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
-  const audioQueueRef = useRef<ArrayBuffer[]>([]);
+  const audioQueueRef = useRef<string[]>([]);
   const isPlayingRef = useRef(false);
   const vadEnabledRef = useRef(false);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const vadIntervalRef = useRef<number | null>(null);
   const [isVadActive, setIsVadActive] = useState(false);
 
-  // Play audio from base64 - optimized with pre-buffering and interrupt support
-  const playAudio = useCallback(async (base64: string, onComplete?: () => void) => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContext({ sampleRate: 48000 });
-    }
+  // Play audio from base64 - with queue support for sequential playback
+  const playAudioFromQueue = useCallback(async () => {
+    if (isPlayingRef.current || audioQueueRef.current.length === 0) return;
     
-    try {
-      const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-      const audioBuffer = await audioContextRef.current.decodeAudioData(bytes.buffer.slice(0));
+    isPlayingRef.current = true;
+    setIsSpeaking(true);
+    
+    while (audioQueueRef.current.length > 0) {
+      const base64 = audioQueueRef.current.shift();
+      if (!base64) continue;
       
-      // Stop any currently playing audio for interrupt support
-      if (currentSourceRef.current) {
-        try {
-          currentSourceRef.current.stop();
-        } catch (e) {
-          // Ignore if already stopped
-        }
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext({ sampleRate: 48000 });
       }
       
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
-      
-      source.onended = () => {
-        currentSourceRef.current = null;
-        setIsSpeaking(false);
-        onComplete?.();
-      };
-      
-      currentSourceRef.current = source;
-      source.start();
-      setIsSpeaking(true);
-    } catch (e) {
-      console.error('Audio playback error:', e);
-      setIsSpeaking(false);
+      try {
+        const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+        const audioBuffer = await audioContextRef.current.decodeAudioData(bytes.buffer.slice(0));
+        
+        const source = audioContextRef.current.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContextRef.current.destination);
+        
+        currentSourceRef.current = source;
+        
+        // Wait for this audio to finish before playing next
+        await new Promise<void>((resolve) => {
+          source.onended = () => {
+            currentSourceRef.current = null;
+            resolve();
+          };
+          source.start();
+        });
+      } catch (e) {
+        console.error('Audio playback error:', e);
+      }
     }
+    
+    isPlayingRef.current = false;
+    setIsSpeaking(false);
   }, []);
+
+  // Queue audio and start playing
+  const playAudio = useCallback(async (base64: string) => {
+    audioQueueRef.current.push(base64);
+    playAudioFromQueue();
+  }, [playAudioFromQueue]);
 
   // Handle WebSocket messages - v2 protocol with streaming support
   const handleMessage = useCallback((event: MessageEvent) => {
@@ -130,7 +142,11 @@ export function useRealtimeVoice({
       if (!warmup) {
         setIsConnected(true);
         onConnectionChange?.(true);
-        ws.send(JSON.stringify({ type: 'start_session', courseCode }));
+        ws.send(JSON.stringify({ 
+          type: 'start_session', 
+          courseCode,
+          voice: voiceId 
+        }));
       }
     };
 
@@ -149,7 +165,7 @@ export function useRealtimeVoice({
     ws.onerror = () => {
       if (!warmup) onError?.('Connection failed');
     };
-  }, [serverUrl, courseCode, handleMessage, onConnectionChange, onError]);
+  }, [serverUrl, courseCode, voiceId, handleMessage, onConnectionChange, onError]);
 
   // Warmup connection on mount for lower first-request latency
   useEffect(() => {

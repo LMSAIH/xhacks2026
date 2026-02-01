@@ -283,45 +283,35 @@ export class VoiceTeacherSession extends DurableObject<Env> {
 
     // Split into sentences for pipelined TTS
     const sentences = this.splitIntoSentences(text);
-    let globalChunkIndex = 0;
 
-    // Process sentences with overlap for smoother playback
+    // Process sentences sequentially - send complete audio per sentence for proper decoding
     for (let i = 0; i < sentences.length && this.isProcessing; i++) {
       const sentence = sentences[i];
       if (!sentence.trim()) continue;
 
       try {
-        // Use Aura-1 model with speaker parameter
+        // Use Aura-1 model with speaker parameter and mp3 encoding for browser compatibility
         const ttsResult = await this.env.AI.run('@cf/deepgram/aura-1', {
           text: sentence,
           speaker: speakerName,
+          encoding: 'mp3',
         }, { returnRawResponse: true }) as Response;
 
         if (!this.isProcessing) break;
 
-        // Get audio bytes from response
+        // Get complete audio for this sentence
         const audioBuffer = await ttsResult.arrayBuffer();
-        const audioBytes = new Uint8Array(audioBuffer);
+        
+        // Send complete sentence audio (browsers need complete MP3 frames to decode)
+        this.send(ws, {
+          type: 'audio',
+          audio: this.toBase64(audioBuffer),
+          format: 'mp3',
+          sampleRate: 24000,
+        });
 
-        // Stream in smaller chunks for faster first byte
-        const totalChunks = Math.ceil(audioBytes.length / CHUNK_SIZE);
-        for (let j = 0; j < totalChunks && this.isProcessing; j++) {
-          const start = j * CHUNK_SIZE;
-          const end = Math.min(start + CHUNK_SIZE, audioBytes.length);
-          const chunk = audioBytes.slice(start, end);
-
-          this.send(ws, {
-            type: 'audio_chunk',
-            audio: this.toBase64(chunk.buffer as ArrayBuffer),
-            chunkIndex: globalChunkIndex++,
-            totalChunks: -1, // Unknown for streaming
-          });
-
-          // Tiny yield to prevent blocking
-          if (j % 4 === 0) {
-            await this.yieldExecution();
-          }
-        }
+        // Small yield to allow message processing
+        await this.yieldExecution();
       } catch (e) {
         console.error('TTS error for sentence:', e);
       }
