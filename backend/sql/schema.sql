@@ -62,24 +62,41 @@ CREATE INDEX IF NOT EXISTS idx_outlines_embedding ON sfu_outlines(embedding_id);
 -- Voice Sessions Table
 -- ============================================
 CREATE TABLE IF NOT EXISTS voice_sessions (
-  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  id TEXT PRIMARY KEY,                 -- ElevenLabs conversation_id
+  agent_id TEXT,                       -- ElevenLabs agent_id
   user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   course_id TEXT REFERENCES sfu_courses(id) ON DELETE SET NULL,
   course_code TEXT,                    -- Denormalized for quick access
+  voice_id TEXT,                       -- ElevenLabs voice ID
   status TEXT DEFAULT 'active',        -- 'active', 'paused', 'completed', 'error'
   topic TEXT,                          -- Current topic being discussed
   context TEXT DEFAULT '{}',           -- JSON: conversation context
   duration_seconds INTEGER DEFAULT 0,
   message_count INTEGER DEFAULT 0,
+  summary TEXT,                        -- Post-call transcript summary
   started_at TEXT DEFAULT (datetime('now')),
   ended_at TEXT,
-  durable_object_id TEXT               -- Reference to DO instance
+  created_at TEXT DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON voice_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_course ON voice_sessions(course_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON voice_sessions(status);
-CREATE INDEX IF NOT EXISTS idx_sessions_started ON voice_sessions(started_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_created ON voice_sessions(created_at);
+
+-- ============================================
+-- Conversation Messages Table (ElevenLabs Transcripts)
+-- ============================================
+CREATE TABLE IF NOT EXISTS conversation_messages (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  session_id TEXT NOT NULL REFERENCES voice_sessions(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,                  -- 'user', 'assistant'
+  content TEXT NOT NULL,
+  timestamp TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_session ON conversation_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_messages_role ON conversation_messages(role);
 
 -- ============================================
 -- Transcripts Table

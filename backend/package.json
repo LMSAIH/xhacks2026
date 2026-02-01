@@ -31,6 +31,7 @@
   "author": "xhacks2026 Team",
   "license": "MIT",
   "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.33.0",
     "hono": "^4.7.0"
   },
   "devDependencies": {
